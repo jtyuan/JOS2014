@@ -127,8 +127,10 @@ mem_init(void)
 {
 	uint32_t cr0, cr4;
 	size_t n;
+	int i;
+	struct PageInfo *pp;
 
-	PSE_ENABLED = 1;
+	PSE_ENABLED = PTE_PS;
 
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
@@ -219,8 +221,6 @@ mem_init(void)
 	// If the machine reboots at this point, you've probably set up your
 	// kern_pgdir wrong.
 
-	cprintf("kern_pgdir:%x %x\n", kern_pgdir, PADDR(kern_pgdir));
-
 	// Set cr4 to enable 4-MByte paging
 	cr4 = rcr4();
 	cr4 |= CR4_PSE;
@@ -282,7 +282,7 @@ page_init(void)
 	extern char end[];
 	range_io = PGNUM(IOPHYSMEM);
 	range_ext = PGNUM(EXTPHYSMEM);
-	free_top = PGNUM(ROUNDUP(PADDR(end) + PGSIZE + npages * sizeof(struct PageInfo), PGSIZE));
+	free_top = PGNUM(PADDR(boot_alloc(0)));
 
 	// 1) Mark physical page 0 as in use.
 	pages[1].pp_link = pages[0].pp_link;
@@ -293,7 +293,9 @@ page_init(void)
 	for (i = range_io; i < range_ext; i++)
 		pages[i].pp_link = NULL;
 
-	// 4) extended memory
+	// 4) extended memory, there part will not be affected,
+	// even if PSE_ENABLED is set (4K 'pages' in side 4M pages
+	// would never be visited).
 	pages[free_top].pp_link = pages[range_ext].pp_link;
 	for (i = range_ext; i < free_top; i++)
 		pages[i].pp_link = NULL;
@@ -319,10 +321,15 @@ page_alloc(int alloc_flags)
 	pp = page_free_list;
 
 	if (pp) {
+
 		page_free_list = pp->pp_link;
 
-		if (alloc_flags & ALLOC_ZERO)
-			memset(page2kva(pp), 0, PGSIZE);
+		if (alloc_flags & ALLOC_ZERO) {
+			if (alloc_flags & ALLOC_EXPG)
+				memset(page2kva(pp), 0, PTSIZE);
+			else
+				memset(page2kva(pp), 0, PGSIZE);
+		}
 
 		pp->pp_link = NULL;
 	} else
@@ -411,25 +418,23 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 // mapped pages.
 //
 // Hint: the TA solution uses pgdir_walk
-//
-// flag: orignal `perm` with PTE_PS flag
 static void
-boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int flag)
+boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	pte_t *ptep;
 	uintptr_t cv;
 	physaddr_t cp;
 
-	if (flag & PTE_PS) {
+	if (perm & PTE_PS) {
 		for (cv = 0, cp = pa; cv < size; cv += PTSIZE, cp += PTSIZE) {
 			ptep = &pgdir[PDX(va + cv)];
-			*ptep = cp | flag | PTE_P;
+			*ptep = cp | perm | PTE_P;
 		}
 	} else {
 		for (cv = 0, cp = pa; cv < size; cv += PGSIZE, cp += PGSIZE) {
 			ptep = pgdir_walk(pgdir, (const void *) (va + cv), 1);
 			if (ptep)
-				*ptep = cp | flag | PTE_P;
+				*ptep = cp | perm | PTE_P;
 		}
 	}
 
@@ -768,6 +773,7 @@ check_va2pa(pde_t *pgdir, uintptr_t va)
 	// |     Address    |                |                     |
 	// +----------------+-------10-------+---------12----------+
 	//  \-------- PTE_ADDR(pte) --------/
+	//
 	if (*pgdir & PTE_PS & PSE_ENABLED)
 		return PTE_ADDR(*pgdir) | (PTX(va) << PTXSHIFT);
 

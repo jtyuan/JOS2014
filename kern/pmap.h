@@ -16,6 +16,7 @@ extern size_t npages;
 
 extern pde_t *kern_pgdir;
 
+
 /* This macro takes a kernel virtual address -- an address that points above
  * KERNBASE, where the machine's maximum 256MB of physical memory is mapped --
  * and returns the corresponding physical address.  It panics if you pass it a
@@ -47,6 +48,7 @@ _kaddr(const char *file, int line, physaddr_t pa)
 enum {
 	// For page_alloc, zero the returned physical page.
 	ALLOC_ZERO = 1<<0,
+	ALLOC_EXPG = 1<<1,
 };
 
 void	mem_init(void);
