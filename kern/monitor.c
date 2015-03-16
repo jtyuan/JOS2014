@@ -24,7 +24,8 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{ "backtrace", "Display stack backtrace", mon_backtrace}
+	{ "backtrace", "Display stack backtrace", mon_backtrace },
+	{ "showmappings", "Display the physical page mappings within given virtual addresses", mon_showmappings }
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -79,6 +80,31 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 			eipinfo.eip_file, eipinfo.eip_line, eipinfo.eip_fn_namelen, 
 			eipinfo.eip_fn_name, eip - eipinfo.eip_fn_addr);
 	}
+	return 0;
+}
+
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	uintptr_t va1, va2, i;
+
+	if (argc < 3)
+		cprintf("mon_showmappings: Missing arguments: %d\n", argc);
+	else if (argc > 3)
+		cprintf("mon_showmappings: Too many arguments: %d\n", argc);
+	else {
+		va1 = ROUNDDOWN(strtol(argv[1], NULL, 16), PGSIZE);
+		va2 = ROUNDUP(strtol(argv[2], NULL, 16), PGSIZE);
+
+		cprintf(" Virtual Address Page Size Physical Address Permissions\n");
+		cprintf("                                            kernel/user\n");
+		for (i = va1; i < va2; ) {
+			
+		}
+
+		// for (; va1 < va2; va1 += PGSIZE)
+	}
+
 	return 0;
 }
 

@@ -18,6 +18,8 @@ pde_t *kern_pgdir;		// Kernel's initial page directory
 struct PageInfo *pages;		// Physical page state array
 static struct PageInfo *page_free_list;	// Free list of physical pages
 
+static int PSE_ENABLED;	// Set to 1 to enable PSE(4-MByte Pages)
+
 
 // --------------------------------------------------------------
 // Detect machine's physical memory setup.
@@ -126,6 +128,8 @@ mem_init(void)
 	uint32_t cr0, cr4;
 	size_t n;
 
+	PSE_ENABLED = 1;
+
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
 
@@ -202,7 +206,7 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
-	boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W);
+	boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W | (PTE_PS & PSE_ENABLED));
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -214,14 +218,17 @@ mem_init(void)
 	//
 	// If the machine reboots at this point, you've probably set up your
 	// kern_pgdir wrong.
-	lcr3(PADDR(kern_pgdir));
 
-	check_page_free_list(0);
+	cprintf("kern_pgdir:%x %x\n", kern_pgdir, PADDR(kern_pgdir));
 
 	// Set cr4 to enable 4-MByte paging
 	cr4 = rcr4();
 	cr4 |= CR4_PSE;
 	lcr4(cr4);
+
+	lcr3(PADDR(kern_pgdir));
+
+	check_page_free_list(0);
 
 	// entry.S set the really important flags in cr0 (including enabling
 	// paging).  Here we configure the rest of the flags that we care about.
@@ -404,18 +411,29 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 // mapped pages.
 //
 // Hint: the TA solution uses pgdir_walk
+//
+// flag: orignal `perm` with PTE_PS flag
 static void
-boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
+boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int flag)
 {
 	pte_t *ptep;
 	uintptr_t cv;
 	physaddr_t cp;
 
-	for (cv = 0, cp = pa; cv < size; cv += PGSIZE, cp += PGSIZE) {
-		ptep = pgdir_walk(pgdir, (const void *) (va + cv), 1);
-		if (ptep)
-			*ptep = cp | perm | PTE_P;
+	if (flag & PTE_PS) {
+		for (cv = 0, cp = pa; cv < size; cv += PTSIZE, cp += PTSIZE) {
+			ptep = &pgdir[PDX(va + cv)];
+			*ptep = cp | flag | PTE_P;
+		}
+	} else {
+		for (cv = 0, cp = pa; cv < size; cv += PGSIZE, cp += PGSIZE) {
+			ptep = pgdir_walk(pgdir, (const void *) (va + cv), 1);
+			if (ptep)
+				*ptep = cp | flag | PTE_P;
+		}
 	}
+
+	
 }
 
 //
@@ -730,6 +748,29 @@ check_va2pa(pde_t *pgdir, uintptr_t va)
 	pgdir = &pgdir[PDX(va)];
 	if (!(*pgdir & PTE_P))
 		return ~0;
+
+	//////////////////////////////////////////////////////////////
+	// Modified for 4MB pages, calculate corresponding physical
+	// address for va. Because va is given 4K-page-wise, we need
+	// to replace the reserved 0-bits([12,22)) in 4MB-PDE with
+	// corresponding offset part
+	//
+	// Linear address 'va'
+	// +--------10------+------------------22------------------+
+	// | Page Directory |         Offset within Page           |
+	// |      Index     |                                      |
+	// +----------------+-------10-------+---------12----------+
+	//  \--- PDX(la) --/ \--- PTX(la) --/ \---- PGOFF(la) ----/
+	// 
+	// Page Directory Entry(4-MByte Page)
+	// +--------10------+----------------+-22------------------+
+	// |    Page Base   |    Reserved    |     Other bits      |
+	// |     Address    |                |                     |
+	// +----------------+-------10-------+---------12----------+
+	//  \-------- PTE_ADDR(pte) --------/
+	if (*pgdir & PTE_PS & PSE_ENABLED)
+		return PTE_ADDR(*pgdir) | (PTX(va) << PTXSHIFT);
+
 	p = (pte_t*) KADDR(PTE_ADDR(*pgdir));
 	if (!(p[PTX(va)] & PTE_P))
 		return ~0;
