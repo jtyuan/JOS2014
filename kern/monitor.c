@@ -25,7 +25,9 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display stack backtrace", mon_backtrace },
-	{ "showmappings", "Display the physical page mappings within given virtual addresses", mon_showmappings }
+	{ "showmappings", "Display page mappings that start within [va1, va2]", mon_showmappings },
+	{ "setperm", "Set/clear/change permission of the given mapping", mon_setperm },
+	{ "dump", "Dump memory in the given virtual/physical address range", mon_dump }
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -83,28 +85,301 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+void
+printheader()
+{
+	cprintf("      Virtual            Page         Physical         Permissions\n");
+	cprintf("            Address        Size             Address      kernel/user\n");
+	cprintf(" --------------------------------------------------------------------\n");
+}
+
+void
+printfootter()
+{
+	cprintf("---Type <return> to continue, or q to quit---");
+}
+
+void
+printpermission(pte_t *ptep) 
+{
+	// print permission bits
+	cprintf("     ");
+	if (ptep && (*ptep & PTE_P)) {
+		cprintf("R");
+		if (*ptep & PTE_W)
+		 	cprintf("W");
+		else
+		 	cprintf("-");
+		cprintf("/");
+		if (*ptep & PTE_U) {
+		 	cprintf("R");
+		 	if (*ptep & PTE_W)
+		 		cprintf("W");
+		 	else
+		 		cprintf("-");
+		} else
+			cprintf("--");
+	} else
+		cprintf("--/--");
+	cprintf("\n");
+}
+
+bool
+flushscreen(int count) 
+{
+	char ch;
+	if (count > 0 && count % 20 == 0) {
+		printfootter();
+		ch = getchar();
+		cprintf("\n");
+		if (ch == 'q')
+			return 1;
+		printheader();
+	}
+	return 0;
+}
+
+void
+printmap(pte_t *ptep, uintptr_t va, int size)
+{
+	char sizestr[16];
+	physaddr_t pa;
+
+	if (size == PGSIZE) {
+		strcpy(sizestr, "4-KByte");
+		pa = PTE_ADDR(va);
+	}
+	else if (size == PTSIZE) {
+		strcpy(sizestr, "4-MByte");
+		pa = PTE_ADDR_EX(va);
+	} else
+		pa = 0;
+	
+	if (size < 0)
+		cprintf("  0x%08x-0x%08x     /           no mapping     ",
+			va, va-size-1);
+	else
+		cprintf("  0x%08x-0x%08x  %s  0x%08x-0x%08x",
+			va, va+size-1, sizestr, pa, (pa+size-1<0xFFFFFFFF)?pa+size-1:0xFFFFFFFF);
+						
+	printpermission(ptep);
+}
+
 int
 mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 {
-	uintptr_t va1, va2, i;
+	extern pde_t *kern_pgdir;
+	extern pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
 
-	if (argc < 3)
-		cprintf("mon_showmappings: Missing arguments: %d\n", argc);
+	uintptr_t va1, va2, i, pttop;
+	pde_t *pdep;
+	pte_t *ptep;
+	int count, over;
+
+	count = 0;
+	over = 0;
+
+	if (argc < 2) {
+		cprintf("Usage: showmappings start_addr [end_addr]\n");
+		cprintf("       all mappings start within [sa, ea] will be printed\n");
+	}
 	else if (argc > 3)
 		cprintf("mon_showmappings: Too many arguments: %d\n", argc);
 	else {
-		va1 = ROUNDDOWN(strtol(argv[1], NULL, 16), PGSIZE);
-		va2 = ROUNDUP(strtol(argv[2], NULL, 16), PGSIZE);
+		va1 = ROUNDUP(strtol(argv[1], NULL, 16), PGSIZE);
+		if (argc == 3)
+			va2 = ROUNDDOWN(strtol(argv[2], NULL, 16), PGSIZE);
+		else
+			va2 = va1; 
 
-		cprintf(" Virtual Address Page Size Physical Address Permissions\n");
-		cprintf("                                            kernel/user\n");
-		for (i = va1; i < va2; ) {
-			
+		// start with a 4-MByte page, va1 align with upper page
+		pdep = &kern_pgdir[PDX(va1)];
+		if (pdep && (*pdep & PTE_P) && (*pdep & PTE_PS))
+			va1 = ROUNDUP(va1, PTSIZE);
+
+		printheader();
+
+		// the boundary conditions are used to prevent overflow
+		if (va1 > va2)
+			cprintf("                                 EMPTY                               \n");
+
+		for (i = va1; va1 <= i && i <= va2; i = pttop) {
+			if (over || flushscreen(count))
+				break;
+			pttop = ROUNDUP(i+1, PTSIZE);
+			pdep = &kern_pgdir[PDX(i)];
+			if (pdep && (*pdep & PTE_P)) {
+				if (!(*pdep & PTE_PS)) {
+					// 4-KByte
+					for (i; i < pttop; i += PGSIZE) {
+						if ((over = flushscreen(count)) == 1)
+							break;
+						ptep = pgdir_walk(kern_pgdir, (const void *)i, 0);
+						if (ptep &&(*ptep & PTE_P))
+							printmap(ptep, i, PGSIZE);
+						else // pte unmapped
+							printmap(ptep, i, -PGSIZE);	
+						count++;
+					}
+				} else {
+					// 4-MByte
+					printmap(pdep, ROUNDDOWN(i, PTSIZE), PTSIZE);
+					count++;
+				}
+			} else {
+				// pde unmapped
+				printmap(pdep, i, -PTSIZE);
+				count++;
+			}
 		}
-
-		// for (; va1 < va2; va1 += PGSIZE)
 	}
 
+
+	cprintf(" --------------------------------END---------------------------------\n");
+
+	return 0;
+}
+
+void
+setperm(pte_t *ptep, int perms[])
+{
+	if (perms[0] == 1)
+		*ptep |= PTE_P;
+	else if (perms[0] == -1)
+		*ptep &= ~PTE_P;
+	if (perms[1] == 1)
+		*ptep |= PTE_U;
+	else if (perms[1] == -1)
+		*ptep &= ~PTE_U;
+	if (perms[2] == 1)
+		*ptep |= PTE_W;
+	else if (perms[2] == -1)
+		*ptep &= ~PTE_W;
+}
+
+int
+mon_setperm(int argc, char **argv, struct Trapframe *tf)
+{
+	extern pde_t *kern_pgdir;
+	extern pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
+
+	pde_t *pdep;
+	pte_t *ptep;
+	uintptr_t addr;
+	int perms[3], add;
+	int i;
+
+	// check arguments
+	if (argc != 3 || (argc == 3 && strlen(argv[2]) > 4)) {
+		cprintf("Usage: setperm addr [+|-]perm\n");
+		cprintf("       perm = {P, U, W}\n");
+		return 0;
+	}
+
+	if (argv[2][0] == '+') {
+		i = 1;
+		add = 1;
+	} else if (argv[2][0] == '-') {
+		i = 1;
+		add = -1;
+	} else {
+		i = 0;
+		add = 1;
+	}
+
+	perms[0] = perms[1] = perms[2] = 0;
+	for (; i < strlen(argv[2]); i++) {
+		if (!(argv[2][i]=='P' || argv[2][i]=='U' || argv[2][i]=='W'
+			||argv[2][i]=='p' || argv[2][i]=='u' || argv[2][i]=='w')) {
+			cprintf("Usage: setperm addr [+/-]perm\n");
+			cprintf("       perm = {P, U, W}\n");
+			return 0;
+		}
+		if (argv[2][i] == 'P' || argv[2][i] == 'p' )
+			perms[0] = 1 * add;
+		if (argv[2][i] == 'U' || argv[2][i] == 'u' )
+			perms[1] = 1 * add;
+		if (argv[2][i] == 'W' || argv[2][i] == 'w' )
+			perms[2] = 1 * add;
+	}
+
+	addr = ROUNDDOWN(strtol(argv[1], NULL, 16), PGSIZE);
+
+	pdep = &kern_pgdir[PDX(addr)];
+	if (pdep) { // no need to judge whether PTE_P stands
+		if (*pdep & PTE_PS) {
+			// 4-MByte
+			addr = ROUNDDOWN(addr, PTSIZE);
+			printmap(pdep, addr, PTSIZE);
+			setperm(pdep, perms);
+			cprintf(" ---->\n");
+			printmap(pdep, addr, PTSIZE);
+		} else {
+			// 4-KByte
+			ptep = pgdir_walk(kern_pgdir, (const void *) addr, 0);
+			if (ptep) {
+				printmap(ptep, addr, PGSIZE);
+				setperm(pdep, perms);
+				cprintf(" ---->\n");
+				printmap(ptep, addr, PGSIZE);
+			} else
+				printmap(ptep, addr, -PGSIZE);
+		}
+	} else {
+		// pde unmapped
+		addr = ROUNDDOWN(addr, PTSIZE);
+		printmap(pdep, addr, -PTSIZE);
+	}
+	return 0;
+}
+
+void
+dumpva(uintptr_t va1, uintptr_t va2)
+{
+	int i;
+	for (i = 0; va1 < va2; va1 = (uintptr_t)((uint32_t *)va1 + 1), i++){
+		if (!(i % 4))
+			cprintf("0x%08x:", va1);
+		cprintf("\t0x%08x", *(uint32_t *)va1);
+		if (i % 4 == 3)
+			cprintf("\n");
+	}
+	if (i % 4)
+		cprintf("\n");
+}
+
+int
+mon_dump(int argc, char **argv, struct Trapframe *tf)
+{
+	extern pde_t *kern_pgdir;
+	extern pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
+
+	uintptr_t va1, va2, i, pttop;
+	pde_t *pdep;
+	pte_t *ptep;
+	char mode;
+
+	mode = 0;
+
+	if (argc < 3) {
+		cprintf("Usage: dump start_addr end_addr [v|p]\n");
+		cprintf("       v(default)|p: virtual addr|physical addr\n");
+	}
+
+	else if (argc > 4) {
+		cprintf("mon_dump: Too many arguments: %d\n", argc);
+	}
+	else {
+		va1 = strtol(argv[1], NULL, 16);
+		va2 = strtol(argv[2], NULL, 16);
+		if (argc == 4)
+			mode = argv[3][0];
+		else
+			mode = 'v';
+		if (mode == 'v')
+			
+
+	}
 	return 0;
 }
 

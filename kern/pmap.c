@@ -324,12 +324,8 @@ page_alloc(int alloc_flags)
 
 		page_free_list = pp->pp_link;
 
-		if (alloc_flags & ALLOC_ZERO) {
-			if (alloc_flags & ALLOC_EXPG)
-				memset(page2kva(pp), 0, PTSIZE);
-			else
-				memset(page2kva(pp), 0, PGSIZE);
-		}
+		if (alloc_flags & ALLOC_ZERO)
+			memset(page2kva(pp), 0, PGSIZE);
 
 		pp->pp_link = NULL;
 	} else
@@ -393,16 +389,16 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	struct PageInfo *pp;
-	pde_t *pdp;
+	pde_t *pdep;
 
-	pdp = &pgdir[PDX(va)];
+	pdep = &pgdir[PDX(va)];
 
-	if (*pdp & PTE_P) 
-		return (pte_t *) KADDR(PTE_ADDR(*pdp)) + PTX(va);
+	if (*pdep & PTE_P)
+		return (pte_t *) KADDR(PTE_ADDR(*pdep)) + PTX(va);
 	else if (create && (pp = page_alloc(1))) {
 		pp->pp_ref++;
-		*pdp = page2pa(pp) | PTE_P | PTE_W | PTE_U;
-		return (pte_t *) KADDR(PTE_ADDR(*pdp)) + PTX(va);
+		*pdep = page2pa(pp) | PTE_P | PTE_W | PTE_U;
+		return (pte_t *) KADDR(PTE_ADDR(*pdep)) + PTX(va);
 	}
 	return NULL;
 }

@@ -40,7 +40,7 @@
 // |    Page Base   |    Reserved    |     Other bits      |
 // |     Address    |   0000000000   |                     |
 // +----------------+-------10-------+---------12----------+
-//  \-------- PTE_ADDR(pte) --------/
+//  \------- PTE_ADDR_EX(pte) -------/
 //
 
 // page number field of address
@@ -98,6 +98,9 @@
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)	((physaddr_t) (pte) & ~0xFFF)
+
+// Address in page table or 4-MByte page directory entry
+#define PTE_ADDR_EX(pte)	((physaddr_t) (pte) & ~0x3FFFF)
 
 // Control Register flags
 #define CR0_PE		0x00000001	// Protection Enable
