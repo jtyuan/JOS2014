@@ -13,7 +13,6 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
-
 struct Command {
 	const char *name;
 	const char *desc;
@@ -27,7 +26,8 @@ static struct Command commands[] = {
 	{ "backtrace", "Display stack backtrace", mon_backtrace },
 	{ "showmappings", "Display page mappings that start within [va1, va2]", mon_showmappings },
 	{ "setperm", "Set/clear/change permission of the given mapping", mon_setperm },
-	{ "dump", "Dump memory in the given virtual/physical address range", mon_dump }
+	{ "dump", "Dump memory in the given virtual address range", mon_dump },
+	{ "shutdown", "Shutdown JOS", mon_shutdown }
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -107,16 +107,16 @@ printpermission(pte_t *ptep)
 	if (ptep && (*ptep & PTE_P)) {
 		cprintf("R");
 		if (*ptep & PTE_W)
-		 	cprintf("W");
+			cprintf("W");
 		else
-		 	cprintf("-");
+			cprintf("-");
 		cprintf("/");
 		if (*ptep & PTE_U) {
-		 	cprintf("R");
-		 	if (*ptep & PTE_W)
-		 		cprintf("W");
-		 	else
-		 		cprintf("-");
+			cprintf("R");
+			if (*ptep & PTE_W)
+				cprintf("W");
+			else
+				cprintf("-");
 		} else
 			cprintf("--");
 	} else
@@ -125,16 +125,17 @@ printpermission(pte_t *ptep)
 }
 
 bool
-flushscreen(int count) 
+flushscreen(int cnt, int lim, int header) 
 {
 	char ch;
-	if (count > 0 && count % 20 == 0) {
+	if (cnt > 0 && cnt % lim == 0) {
 		printfootter();
 		ch = getchar();
 		cprintf("\n");
 		if (ch == 'q')
 			return 1;
-		printheader();
+		if (header)
+			printheader();
 	}
 	return 0;
 }
@@ -204,7 +205,7 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 			cprintf("                                 EMPTY                               \n");
 
 		for (i = va1; va1 <= i && i <= va2; i = pttop) {
-			if (over || flushscreen(count))
+			if (over || flushscreen(count, 20, 1))
 				break;
 			pttop = ROUNDUP(i+1, PTSIZE);
 			pdep = &kern_pgdir[PDX(i)];
@@ -212,7 +213,7 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 				if (!(*pdep & PTE_PS)) {
 					// 4-KByte
 					for (i; i < pttop; i += PGSIZE) {
-						if ((over = flushscreen(count)) == 1)
+						if ((over = flushscreen(count, 20, 1)) == 1)
 							break;
 						ptep = pgdir_walk(kern_pgdir, (const void *)i, 0);
 						if (ptep &&(*ptep & PTE_P))
@@ -333,54 +334,50 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
-void
-dumpva(uintptr_t va1, uintptr_t va2)
-{
-	int i;
-	for (i = 0; va1 < va2; va1 = (uintptr_t)((uint32_t *)va1 + 1), i++){
-		if (!(i % 4))
-			cprintf("0x%08x:", va1);
-		cprintf("\t0x%08x", *(uint32_t *)va1);
-		if (i % 4 == 3)
-			cprintf("\n");
-	}
-	if (i % 4)
-		cprintf("\n");
-}
-
 int
 mon_dump(int argc, char **argv, struct Trapframe *tf)
 {
-	extern pde_t *kern_pgdir;
-	extern pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
+	uintptr_t va1, va2, i;
 
-	uintptr_t va1, va2, i, pttop;
-	pde_t *pdep;
-	pte_t *ptep;
-	char mode;
-
-	mode = 0;
-
-	if (argc < 3) {
-		cprintf("Usage: dump start_addr end_addr [v|p]\n");
-		cprintf("       v(default)|p: virtual addr|physical addr\n");
-	}
-
-	else if (argc > 4) {
-		cprintf("mon_dump: Too many arguments: %d\n", argc);
-	}
+	if (argc != 3)
+		cprintf("Usage: dump start_addr end_addr\n");
 	else {
 		va1 = strtol(argv[1], NULL, 16);
 		va2 = strtol(argv[2], NULL, 16);
-		if (argc == 4)
-			mode = argv[3][0];
-		else
-			mode = 'v';
-		if (mode == 'v')
-			
-
+		for (i = 0; va1 < va2; va1 = (uintptr_t)((uint32_t *)va1 + 1), i++){
+			if (flushscreen(i, 23*4, 0))
+				break;
+			if (!(i % 4))
+				cprintf("0x%08x:", va1);
+			cprintf("\t0x%08x", *(uint32_t *)va1);
+			if (i % 4 == 3)
+				cprintf("\n");
+		}
+		if (i % 4)
+			cprintf("\n");
 	}
 	return 0;
+}
+
+int
+mon_shutdown(int argc, char **argv, struct Trapframe *tf)
+{
+	const char *s = "Shutdown";
+	__asm __volatile ("cli");
+	for (;;) {
+		// (phony) ACPI shutdown (http://forum.osdev.org/viewtopic.php?t=16990)
+		// Works for qemu and bochs.
+		outw (0xB004, 0x2000);
+
+		// Magic shutdown code for bochs and qemu.
+		while(*s) {
+			outb (0x8900, *s);
+			++s;
+		}
+
+		// Magic code for VMWare. Also a hard lock.
+		__asm __volatile ("cli; hlt");
+	}
 }
 
 
@@ -437,7 +434,6 @@ monitor(struct Trapframe *tf)
 
 	cprintf("\033[31mWelcome \033[32mto \033[33mthe \033[34mJOS \033[35mkernel \033[36mmonitor!\033[0m\n");
 	cprintf("Type 'help' for a list of commands.\n");
-
 
 	while (1) {
 		buf = readline("K> ");
