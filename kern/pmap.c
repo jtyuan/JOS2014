@@ -102,7 +102,6 @@ boot_alloc(uint32_t n)
 	result = nextfree;
 
 	if (n > 0) {
-		// TODO check up range
 		if (PADDR(nextfree) + n > npages * PGSIZE) {
 			panic("boot_alloc: Insufficient memory for initial allocation\n");
 		}

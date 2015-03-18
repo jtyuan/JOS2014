@@ -362,8 +362,14 @@ mon_dump(int argc, char **argv, struct Trapframe *tf)
 int
 mon_shutdown(int argc, char **argv, struct Trapframe *tf)
 {
+	
+	// referenced chaOS from github
+	// [https://github.com/Kijewski/chaOS/]
+
 	const char *s = "Shutdown";
+
 	__asm __volatile ("cli");
+	
 	for (;;) {
 		// (phony) ACPI shutdown (http://forum.osdev.org/viewtopic.php?t=16990)
 		// Works for qemu and bochs.
