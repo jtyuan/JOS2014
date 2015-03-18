@@ -221,9 +221,11 @@ mem_init(void)
 	// kern_pgdir wrong.
 
 	// Set cr4 to enable 4-MByte paging
-	cr4 = rcr4();
-	cr4 |= CR4_PSE;
-	lcr4(cr4);
+	if (PSE_ENABLED) {
+		cr4 = rcr4();
+		cr4 |= CR4_PSE;
+		lcr4(cr4);
+	}
 
 	lcr3(PADDR(kern_pgdir));
 
