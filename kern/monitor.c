@@ -213,7 +213,8 @@ mon_showmappings(int argc, char **argv, struct Trapframe *tf)
 				if (!(*pdep & PTE_PS)) {
 					// 4-KByte
 					for (i; i < pttop; i += PGSIZE) {
-						if ((over = flushscreen(count, 20, 1)) == 1)
+						if ((over = (flushscreen(count, 20, 1) == 1 || 
+							i > va2 || i < va1)))
 							break;
 						ptep = pgdir_walk(kern_pgdir, (const void *)i, 0);
 						if (ptep &&(*ptep & PTE_P))
@@ -320,7 +321,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 			ptep = pgdir_walk(kern_pgdir, (const void *) addr, 0);
 			if (ptep) {
 				printmap(ptep, addr, PGSIZE);
-				setperm(pdep, perms);
+				setperm(ptep, perms);
 				cprintf(" ---->\n");
 				printmap(ptep, addr, PGSIZE);
 			} else
