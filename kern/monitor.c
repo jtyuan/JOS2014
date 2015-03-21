@@ -336,21 +336,42 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 }
 
 int
+checkmapping(uintptr_t va)
+{
+	extern pde_t *kern_pgdir;
+	extern pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
+
+	pte_t *ptep;
+
+	ptep = pgdir_walk(kern_pgdir, (const void *)va, 0);
+
+	if (ptep && (*ptep & PTE_P))
+		return 1;
+	return 0;
+}
+
+int
 mon_dump(int argc, char **argv, struct Trapframe *tf)
 {
 	uintptr_t va1, va2, i;
 
 	if (argc != 3)
-		cprintf("Usage: dump start_addr end_addr\n");
+		cprintf("Usage: dump start_addr len\n");
 	else {
 		va1 = strtol(argv[1], NULL, 16);
-		va2 = strtol(argv[2], NULL, 16);
+		va2 = (uintptr_t)((uint32_t *)va1 + strtol(argv[2], NULL, 10));
+
 		for (i = 0; va1 < va2; va1 = (uintptr_t)((uint32_t *)va1 + 1), i++){
 			if (flushscreen(i, 23*4, 0))
 				break;
 			if (!(i % 4))
 				cprintf("0x%08x:", va1);
-			cprintf("\t0x%08x", *(uint32_t *)va1);
+
+			if (checkmapping(va1))
+				cprintf("\t0x%08x", *(uint32_t *)va1);
+			else
+				cprintf("\tpgunmapped");
+
 			if (i % 4 == 3)
 				cprintf("\n");
 		}
