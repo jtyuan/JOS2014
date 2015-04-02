@@ -15,6 +15,7 @@
 
 // A linear address 'la' has a three-part structure as follows:
 //
+// 4-KByte Linear address
 // +--------10------+-------10-------+---------12----------+
 // | Page Directory |   Page Table   | Offset within Page  |
 // |      Index     |      Index     |                     |
@@ -25,9 +26,28 @@
 // The PDX, PTX, PGOFF, and PGNUM macros decompose linear addresses as shown.
 // To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
 // use PGADDR(PDX(la), PTX(la), PGOFF(la)).
+//
+// 4-MByte Linear address
+// +--------10------+------------------22------------------+
+// | Page Directory |         Offset within Page           |
+// |      Index     |                                      |
+// +----------------+-------10-------+---------12----------+
+//  \--- PDX(la) --/ \--- PTX(la) --/ \---- PGOFF(la) ----/
+//  \- PGNUMEX(la)-/ \----------- PGOFFEX(la) ------------/
+//
+// Page Directory Entry(4-MByte Page)
+// +--------10------+----------------+-22------------------+
+// |    Page Base   |    Reserved    |     Other bits      |
+// |     Address    |   0000000000   |                     |
+// +----------------+-------10-------+---------12----------+
+//  \------- PTE_ADDR_EX(pte) -------/
+//
 
 // page number field of address
 #define PGNUM(la)	(((uintptr_t) (la)) >> PTXSHIFT)
+
+// page number field of address mapped to 4-MByte Page
+#define PGNUMEX(la)	(((uintptr_t) (la)) >> PDXSHIFT)
 
 // page directory index
 #define PDX(la)		((((uintptr_t) (la)) >> PDXSHIFT) & 0x3FF)
@@ -37,6 +57,10 @@
 
 // offset in page
 #define PGOFF(la)	(((uintptr_t) (la)) & 0xFFF)
+
+// offset in 4-MByte page, the lower 10 bits are cleared,
+// so that la = PGNUMEX(la) + PGOFFEX(la) is still true.
+#define PGOFFEX(la)	(((uintptr_t) (la)) & 0x3FFFF)
 
 // construct linear address from indexes and offset
 #define PGADDR(d, t, o)	((void*) ((d) << PDXSHIFT | (t) << PTXSHIFT | (o)))
@@ -74,6 +98,9 @@
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)	((physaddr_t) (pte) & ~0xFFF)
+
+// Address in page table or 4-MByte page directory entry
+#define PTE_ADDR_EX(pte)	((physaddr_t) (pte) & ~0x3FFFF)
 
 // Control Register flags
 #define CR0_PE		0x00000001	// Protection Enable
