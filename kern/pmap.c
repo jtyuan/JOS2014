@@ -130,7 +130,7 @@ mem_init(void)
 	int i;
 	struct PageInfo *pp;
 
-	PSE_ENABLED = PTE_PS;
+	PSE_ENABLED = 0;//PTE_PS;
 
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
@@ -164,6 +164,7 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+	envs = (struct Env *) boot_alloc(NENV * sizeof(struct Env));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -198,6 +199,8 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	boot_map_region(kern_pgdir, UENVS, PTSIZE, PADDR(envs), PTE_U);
+
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -583,6 +586,25 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+
+
+	void *cur = (void *)(uintptr_t)va;
+	void *top = ((void *)(uintptr_t)cur) + len;
+	pte_t *ptep;
+
+	perm |= PTE_P;
+
+	for (; cur < top; cur = ROUNDDOWN(cur+PGSIZE, PGSIZE)) {
+		if ((uint32_t) cur > ULIM) {
+			user_mem_check_addr = (uintptr_t) cur;
+			return -E_FAULT;
+		}
+		page_lookup(env->env_pgdir, cur, &ptep);
+		if (!(ptep && ((*ptep & perm) == perm))) {
+			user_mem_check_addr = (uintptr_t) cur;
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }
