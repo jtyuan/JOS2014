@@ -164,10 +164,15 @@ trap_dispatch(struct Trapframe *tf)
 	}
 
 	if (tf->tf_trapno == T_BRKPT) {
-		// tf->tf_eflags |= FL_TF;
 		monitor(tf);
 		return;
 	}
+
+
+	if (tf->tf_trapno == T_DEBUG) {
+		monitor_jdb(tf);
+		return;
+	}	
 
 	if (tf->tf_trapno == T_SYSCALL) {
 		
@@ -250,7 +255,7 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
-	if ((tf->tf_cs & 3) != 3) {
+	if (tf->tf_cs == GD_KT) {
 		// Trapped from kernel mode
 		panic("page_fault_handler: page fault in kernel mode");
 	}
@@ -264,4 +269,3 @@ page_fault_handler(struct Trapframe *tf)
 	print_trapframe(tf);
 	env_destroy(curenv);
 }
-

@@ -28,9 +28,20 @@ static struct Command commands[] = {
 	{ "showmappings", "Display page mappings that start within [va1, va2]", mon_showmappings },
 	{ "setperm", "Set/clear/change permission of the given mapping", mon_setperm },
 	{ "dump", "Dump memory in the given virtual address range", mon_dump },
-	{ "shutdown", "Shutdown JOS", mon_shutdown }
+	{ "shutdown", "Shutdown JOS", mon_shutdown },
+	{ "jdb", "Run JOS debugger", mon_jdb },
+	{ "si", "Single Step", jdb_si },
+	{ "c", "Continue execution", jdb_con },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
+
+static struct Command commands_debug[] = {
+	{ "help", "Display this list of commands", jdb_help },
+	{ "si", "Single Step", jdb_si },
+	{ "c", "Continue execution", jdb_con },
+	{ "quit", "Exit debugger", jdb_quit },
+};
+#define NCOMMANDS_DEBUG (sizeof(commands_debug)/sizeof(commands_debug[0]))
 
 /***** Implementations of basic kernel monitor commands *****/
 
@@ -409,6 +420,41 @@ mon_shutdown(int argc, char **argv, struct Trapframe *tf)
 	}
 }
 
+int
+mon_jdb(int argc, char **argv, struct Trapframe *tf) {
+	monitor_jdb(tf);
+	return -1;
+}
+
+int
+jdb_help(int argc, char **argv, struct Trapframe *tf) {
+	int i;
+
+	for (i = 0; i < NCOMMANDS_DEBUG; i++)
+		cprintf("%s - %s\n", commands_debug[i].name, commands_debug[i].desc);
+	return 0;
+}
+
+int
+jdb_si(int argc, char **argv, struct Trapframe *tf) {
+	// uint32_t eflags;
+
+	// eflags = read_eflags();
+	// eflags |= FL_TF;
+	// write_eflags(eflags);
+	tf->tf_eflags |= FL_TF;
+
+	return -1;
+}
+
+int jdb_con(int argc, char **argv, struct Trapframe *tf) {
+	tf->tf_eflags &= ~FL_TF;
+	return -1;
+}
+
+int jdb_quit(int argc, char **argv, struct Trapframe *tf) {
+	return jdb_con(argc, argv, tf);
+}
 
 /***** Kernel monitor command interpreter *****/
 
@@ -454,16 +500,72 @@ runcmd(char *buf, struct Trapframe *tf)
 	return 0;
 }
 
+static int
+runcmd_jdb(char *buf, struct Trapframe *tf)
+{
+	int argc;
+	char *argv[MAXARGS];
+	int i;
+
+	// Parse the command buffer into whitespace-separated arguments
+	argc = 0;
+	argv[argc] = 0;
+	while (1) {
+		// gobble whitespace
+		while (*buf && strchr(WHITESPACE, *buf))
+			*buf++ = 0;
+		if (*buf == 0)
+			break;
+
+		// save and scan past next arg
+		if (argc == MAXARGS-1) {
+			cprintf("Too many arguments (max %d)\n", MAXARGS);
+			return 0;
+		}
+		argv[argc++] = buf;
+		while (*buf && !strchr(WHITESPACE, *buf))
+			buf++;
+	}
+	argv[argc] = 0;
+
+	// Lookup and invoke the command
+	if (argc == 0)
+		return 0;
+	for (i = 0; i < NCOMMANDS_DEBUG; i++) {
+		if (strcmp(argv[0], commands_debug[i].name) == 0)
+			return commands_debug[i].func(argc, argv, tf);
+	}
+	cprintf("Unknown command '%s'\n", argv[0]);
+	return 0;
+}
+
+void
+monitor_jdb(struct Trapframe *tf)
+{
+	char *buf;
+
+	if (tf) 
+		cprintf("=> 0x%08x\n", tf->tf_eip);
+
+	while (1) {
+		buf = readline("(jdb) ");
+		if (buf != NULL)
+			if (runcmd_jdb(buf, tf) < 0)
+				break;
+	}
+}
+
+
 void
 monitor(struct Trapframe *tf)
 {
 	char *buf;
 
-//	cprintf("Welcome to the JOS kernel monitor!\n");
+	cprintf("Welcome to the JOS kernel monitor!\n");
 
 	if (tf != NULL)
 		print_trapframe(tf);
-	cprintf("Welcome to the JOS kernel monitor!\n");
+
 	cprintf("Type 'help' for a list of commands.\n");
 
 	while (1) {
