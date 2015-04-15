@@ -76,20 +76,28 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	struct Eipdebuginfo eipinfo;
-	uintptr_t ebp, eip, args[5];
+	uintptr_t ebp, eip, args[5], i;
 
 	cprintf("Stack backtrace:\n");
 
 	for (ebp = read_ebp(); ebp != 0; ebp = *(uintptr_t *)ebp) {
 		eip = *((uintptr_t *)ebp + 1);
 		debuginfo_eip(eip, &eipinfo);
-		args[0] = *((uintptr_t *)ebp + 2);
-		args[1] = *((uintptr_t *)ebp + 3);
-		args[2] = *((uintptr_t *)ebp + 4);
-		args[3] = *((uintptr_t *)ebp + 5);
-		args[4] = *((uintptr_t *)ebp + 6);
-		cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n", 
-			ebp, eip, args[0], args[1], args[2], args[3], args[4]);
+		// args[0] = *((uintptr_t *)ebp + 2);
+		// args[1] = *((uintptr_t *)ebp + 3);
+		// args[2] = *((uintptr_t *)ebp + 4);
+		// args[3] = *((uintptr_t *)ebp + 5);
+		// args[4] = *((uintptr_t *)ebp + 6);
+		// cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n", 
+		// 	ebp, eip, args[0], args[1], args[2], args[3], args[4]);
+		cprintf("  ebp %08x", ebp);
+		cprintf("  eip %08x", eip);
+		cprintf("  args");
+		for (i = 0; i < 5; ++i) {
+			args[i] = *((uintptr_t *)ebp + 2 + i);
+			cprintf(" %08x", args[i]);
+		}
+		cprintf("\n");
 		cprintf("         %s:%d: %.*s+%d\n", 
 			eipinfo.eip_file, eipinfo.eip_line, eipinfo.eip_fn_namelen, 
 			eipinfo.eip_fn_name, eip - eipinfo.eip_fn_addr);
@@ -442,12 +450,19 @@ jdb_si(int argc, char **argv, struct Trapframe *tf) {
 	// eflags = read_eflags();
 	// eflags |= FL_TF;
 	// write_eflags(eflags);
+	if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+		return -1;
+
 	tf->tf_eflags |= FL_TF;
 
 	return -1;
 }
 
 int jdb_con(int argc, char **argv, struct Trapframe *tf) {
+
+	if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+		return -1;
+
 	tf->tf_eflags &= ~FL_TF;
 	return -1;
 }
@@ -542,7 +557,7 @@ runcmd_jdb(char *buf, struct Trapframe *tf)
 void
 monitor_jdb(struct Trapframe *tf)
 {
-	char *buf;
+	char *buf, ch;
 
 	if (tf) 
 		cprintf("=> 0x%08x\n", tf->tf_eip);

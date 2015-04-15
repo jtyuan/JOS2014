@@ -586,8 +586,6 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
-
-
 	void *cur = (void *)(uintptr_t)va;
 	void *top = ((void *)(uintptr_t)cur) + len;
 	pte_t *ptep;

@@ -186,15 +186,7 @@ trap_dispatch(struct Trapframe *tf)
 
 		return;
 	}
-
-	// if (0 <= tf->tf_trapno && tf->tf_trapno <= 19) {
-	// 	if (tf->tf_trapno == 9 || tf->tf_trapno == 15) 
-	// 		panic("trap_dispatch: reserved trapno");
 	
-	// 	extern void (*handler[])();
-	// 	handler[tf->tf_trapno]();
-	// }
-
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)

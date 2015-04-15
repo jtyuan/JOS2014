@@ -82,7 +82,7 @@ handler:
 	TRAPHANDLER_NOEC(handler18, T_MCHK);
 	TRAPHANDLER_NOEC(handler19, T_SIMDERR);
 .data
-	.space 112 # (47-19)*4
+	.space 112# (47-19)*4
 .text
 	TRAPHANDLER_NOEC(handler48, T_SYSCALL);
 
