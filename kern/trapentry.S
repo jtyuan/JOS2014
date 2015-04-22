@@ -22,6 +22,9 @@
  * where NAME is the argument passed to TRAPHANDLER.
  */
 #define TRAPHANDLER(name, num)						\
+.data;\
+	.long name;\
+.text;\
 	.globl name;		/* define global symbol for 'name' */	\
 	.type name, @function;	/* symbol type is function */		\
 	.align 2;		/* align function definition */		\
@@ -34,6 +37,9 @@
  * format in either case.
  */
 #define TRAPHANDLER_NOEC(name, num)					\
+.data;\
+	.long name;\
+.text;\
 	.globl name;							\
 	.type name, @function;						\
 	.align 2;							\
@@ -42,15 +48,59 @@
 	pushl $(num);							\
 	jmp _alltraps
 
-.text
+#define dummy()\
+.data;\
+	.long 0
 
+.data
+	.globl handler
+	.align 4
+handler:
+.text
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
-
+	TRAPHANDLER_NOEC(handler0, T_DIVIDE);
+	TRAPHANDLER_NOEC(handler1, T_DEBUG);
+	TRAPHANDLER_NOEC(handler2, T_NMI);
+	TRAPHANDLER_NOEC(handler3, T_BRKPT);
+	TRAPHANDLER_NOEC(handler4, T_OFLOW);
+	TRAPHANDLER_NOEC(handler5, T_BOUND);
+	TRAPHANDLER_NOEC(handler6, T_ILLOP);
+	TRAPHANDLER_NOEC(handler7, T_DEVICE);
+	TRAPHANDLER(handler8, T_DBLFLT);
+	# TRAPHANDLER(handler9, 9);
+	dummy();
+	TRAPHANDLER(handler10, T_TSS);
+	TRAPHANDLER(handler11, T_SEGNP);
+	TRAPHANDLER(handler12, T_STACK);
+	TRAPHANDLER(handler13, T_GPFLT);
+	TRAPHANDLER(handler14, T_PGFLT);
+	# TRAPHANDLER(handler15, 15);
+	dummy();
+	TRAPHANDLER_NOEC(handler16, T_FPERR);
+	TRAPHANDLER_NOEC(handler17, T_ALIGN);
+	TRAPHANDLER_NOEC(handler18, T_MCHK);
+	TRAPHANDLER_NOEC(handler19, T_SIMDERR);
+.data
+	.space 112# (47-19)*4
+.text
+	TRAPHANDLER_NOEC(handler48, T_SYSCALL);
 
 
 /*
  * Lab 3: Your code here for _alltraps
  */
+ 	_alltraps:
+ 	pushl %ds
+ 	pushl %es
+ 	pushal
+ 	movw $GD_KD, %ax
+ 	movw %ax, %ds
+ 	movw $GD_KD, %ax
+ 	movw %ax, %es
+ 	pushl %esp
+ 	call trap
+
+
 

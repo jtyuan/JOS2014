@@ -1,0 +1,1000 @@
+    5  sudo vim /etc/apt/sources.list
+    6  sudo gedit /etc/apt/sources.list
+    7  sudo apt-get update
+    8  sudo apt-get install build-essential 
+    9  sudo apt-get install qemu
+   10  sudo apt-get install git
+   11  cd Desktop/oslab/
+   12  ls
+   13  git clone JOS2014.git.zip
+   14  git clone JOS2014.git.zip ./
+   15  git clone JOS2014.git
+   16  git clone QEMU.git/
+   17  rm -rf JOS2014.git/
+   18  rm -rf QEMU.git/
+   19  cd QEMU/
+   20  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+   21  ls
+   22  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+   23  sudo apt-get install zlib
+   24  sudo apt-get install zlib2.0
+   25  sudo apt-get install zlib1g-dev
+   26  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+   27  sudo apt-get install glib
+   28  sudo apt-get install glib2.0
+   29  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu
+   30  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+   31  sudo make -j 8
+   32  vim Makefile.target 
+   33  sudo apt-get install vim
+   34  vim Makefile.target 
+   35  gcc -m32 -print-libgcc-file-name
+   36  sudo apt-get install -y build-essential gdb
+   37  sudo apt-get install gcc-multilib
+   38  sudo apt-get gmp
+   39  sudo apt-get install gmp
+   40  sudo apt-get search gmp
+   41  sudo apt-get gmp*
+   42  sudo apt-get mpfr
+   43  sudo apt-get upgrade
+   44  ls
+   45  vim Makefile.target 
+   46  sudo make -j 8
+   47  make clean
+   48  sudo make clean
+   49  sudo apt-get install libsdl1.2-dev
+   50  sudo make clean
+   51  sudo make -j 8
+   52  vim Makefile.target 
+   53  vim Makefile
+   54  sudo make -j 8
+   55  sudo make clean
+   56  sudo make -j 8
+   57  vim Makefile
+   58  ls
+   59  vim Makefile.target 
+   60  rm -rf ~/.config/monitors.xml
+   61  cd Desktop/oslab/
+   62  ls
+   63  cd QEMU/
+   64  ls
+   65  sudo make clean
+   66  sudo make -j 8
+   67  sudo make -j 4
+   68  sudo make install
+   69  qemu
+   70  ls
+   71  ls /usr/local/bin/qemu
+   72  ls /usr/local/bin
+   73  ls
+   74  cd ..
+   75  ls
+   76  cd JOS2014/
+   77  ls
+   78  make
+   79  make qemu
+   80  make qemu-nox
+   81  sudo apt-get install chrome
+   82  aptitude
+   83  sudo apt-get install aptitude
+   84  vim .gdbinit
+   85  cd Desktop/oslab/JOS2014/
+   86  make qemu
+   87  make qemu-gdb
+   88  make qemu
+   89  make qemu-gdb
+   90  exit
+   91  cd Desktop/oslab/JOS2014/
+   92  ls
+   93  gdb
+   94  exit
+   95  sudo vim /usr/share/icons/default/index.theme
+   96  gnome-mouse-properties
+   97  sudo apt-get install dconf-tools
+   98  dconf-editor 
+   99  exit
+  100  cd Desktop/vmware-tools-distrib/
+  101  ls
+  102  sudo ./vmware-install.pl 
+  103  /usr/bin/vmware-toolbox-cmd 
+  104  /usr/bin/vmware-user
+  105  sudo /usr/bin/vmware-user
+  106  sudo restart lightdm
+  107  sudo /usr/bin/vmware-user
+  108  compiz
+  109  compiz -h
+  110  dconf reset -f /org/compiz
+  111  rm ~/.gconf ~/.gconfd ~/.metacity ~/.compiz-1 ~/.config/compiz-1 ~/.config/dconf -rf
+  112  vmware-checkvm 
+  113  vmwarectrl 
+  114  vmware-user
+  115  vmware-config-tools.pl 
+  116  sudo vmware-config-tools.pl 
+  117  sudo su -c /usr/bin/vmware-user
+  118  sublime
+  119  cd Desktop/Sublime\ Text\ 2/
+  120  ls
+  121  chmod 700 *
+  122  ./PackageSetup.py 
+  123  vim PackageSetup.py 
+  124  python
+  125  cd Desktop/
+  126  l
+  127  ls
+  128  rm e4beb8aegw1epq3a7q3dbj20rs10uq6o.jpg
+  129  rm VMwareTools-9.9.2-2496486.tar.gz 
+  130  vm -rf vmware-tools-distrib/
+  131  ls
+  132  rm -rf vmware-tools-distrib/
+  133  cd oslab/
+  134  ls
+  135  cd JOS2014/
+  136  ls
+  137  ./grade-lab1 
+  138  chrome
+  139  chromium
+  140  sudo add-apt-repository ppa:noobslab/themes
+  141  sudo apt-get update
+  142  wget -O ylmfos-icons.deb http://drive.noobslab.com/data/icons/ylmfos-icons_1.0.deb
+  143  sudo dpkg -i ylmfos-icons.deb; rm ylmfos-icons.deb
+  144  ls /usr/share/themes 
+  145  sudo dpkg -i ylmfos-icons.deb; rm ylmfos-icons.debsudo apt-get install ylmfos-theme
+  146  sudo apt-get install ylmfos-theme
+  147  cd Desktop/oslab/JOS2014/
+  148  make
+  149  dgb
+  150  gdb
+  151  make
+  152  gdb
+  153  sudo apt-get install guake
+  154  cd Desktop/oslab/JOS2014/
+  155  ls
+  156  ls
+  157  qemu
+  158  make qemu
+  159  cd kern/
+  160  ls
+  161  objdump -D -b binary -m i386 kernel.ld 
+  162  objdump -D -b binary -m i386 kernel.ld > ~/Desktop/oslab/dump/kernel.ld.txt
+  163  objdump -m
+  164  objdump -D -b binary -m i8086 kernel.ld > ~/Desktop/oslab/dump/kernel.ld.txt
+  165  objdump -D -b binary -m i8086 ../obj/kern/kernel > ~/Desktop/oslab/dump/kernel.ld.txt
+  166  sudo apt-get install unity-tweak-tool
+  167  sudo apt-get install zukiwi
+  168  ls
+  169  make
+  170  gdb
+  171  cd obj/
+  172  ls
+  173  cd boot/
+  174  ls
+  175  cd ..
+  176  cd kern/
+  177  ls
+  178  objdump -D -b binary -m i8086 ../obj/kern/kernel > ~/Desktop/oslab/dump/kernel.ld.txt
+  179  objdump -D -b binary -m i8086 kernel > ~/Desktop/oslab/dump/kernel.ld.txt
+  180  sudo apt-get install hackstation-theme
+  181  sudo add-apt-repository ppa:noobslab/icons
+  182  sudo apt-get update
+  183  sudo apt-get install ghost-flat-icons
+  184  cd Desktop/
+  185  ls
+  186  cd JOS2014/
+  187  ls
+  188  cd ../oslab/JOS2014/
+  189  ls
+  190  make qemu-gdb
+  191  cd Desktop/oslab/JOS2014/
+  192  gdb
+  193  cd Desktop/oslab/JOS2014/
+  194  ls
+  195  make qemu-gdb
+  196  ls
+  197  cd obj/
+  198  ls
+  199  cd boot/
+  200  ls
+  201  vim boot.out 
+  202  objdump boot.o
+  203  objdump boot.out
+  204  objdump -D boot.out
+  205  objdump 
+  206  objdump -D boot.out > ~/Desktop/oslab/dump/boot.out.out
+  207  objdump -D boot > ~/Desktop/oslab/dump/boot.out
+  208  ls
+  209  vim boot.asm
+  210  cd ..
+  211  ls
+  212  cd kern/
+  213  ls
+  214  objdump -D kernel > ~/Desktop/oslab/dump/kernel.out
+  215  vim kernel.asm
+  216  cd ..
+  217  ls
+  218  cd ..
+  219  ls
+  220  make qemu-gdb
+  221  asdf
+  222  ls
+  223  cd Desktop/oslab/J
+  224  cd Desktop/oslab/JOS2014/
+  225  make qemu-gdb
+  226  make clean
+  227  make
+  228  make qemu-gdb
+  229  ls
+  230  vim boot/Makefrag 
+  231  make clean
+  232  make
+  233  make qemu-gdb
+  234  make clean
+  235  vim boot/Makefrag 
+  236  make
+  237  make qemu-gdb
+  238  make clean
+  239  vim boot/Makefrag 
+  240  make
+  241  make qemu-gdb
+  242  vim boot/Makefrag 
+  243  make clean
+  244  make
+  245  make qemu-gdb
+  246  make clean
+  247  vim boot/Makefrag 
+  248  make clean
+  249  make
+  250  make qemu-gdb
+  251  vim boot/Makefrag 
+  252  make
+  253  make clean
+  254  make
+  255  make qemu-gdb
+  256  vim boot/Makefrag 
+  257  make clean
+  258  make
+  259  make qemu-gdb
+  260  vim boot/Makefrag 
+  261  make clean
+  262  make
+  263  make qemu-gdb
+  264  vim boot/Makefrag 
+  265  make qemu-gdb
+  266  vim boot/Makefrag 
+  267  make clean
+  268  make
+  269  make qemu-gdb
+  270  make
+  271  gdb
+  272  make
+  273  gdb
+  274  vim kernel.asm
+  275  gdb
+  276  gd
+  277  gdb
+  278  objdump -f obj/kern/kernel
+  279  i386-jos-elf-objdump -h obj/kern/kernel
+  280  objdump -h obj/kern/kernel
+  281  objdump -h obj/boot/boot.out
+  282  objdump -x obj/kern/kernel
+  283  objdump -b obj/kern/kernel
+  284  objdump -D -b obj/kern/kernel
+  285  objdump -D  obj/kern/kernel
+  286  objdump -D  obj/kern/kernel > ~/Desktop/oslab/dump/kernel.out
+  287  objdump -x 
+  288  objdump -x obj/kern/kernel
+  289  cd Desktop/oslab/JOS2014/
+  290  ls
+  291  make clean
+  292  make
+  293  make qemu-gdb
+  294  make clean
+  295  make
+  296  make qemu-gdb
+  297  make qemu
+  298  make clean
+  299  make
+  300  make qemu
+  301  make
+  302  make qemu
+  303  make
+  304  make clean
+  305  make
+  306  make qemu
+  307  make clean
+  308  naje
+  309  make
+  310  make qemu
+  311  make qemu-gdb
+  312  make clean
+  313  make
+  314  make qemu
+  315  make clean
+  316  make
+  317  make qemu
+  318  make clean
+  319  make
+  320  make qemu
+  321  make clean & make
+  322  make qemu
+  323  make grade 
+  324  make clean & make
+  325  make grade 
+  326  make clean & make
+  327  make qemu
+  328  make clean
+  329  make grade
+  330  make clean
+  331  make
+  332  make grade
+  333  make clean
+  334  make
+  335  make clean & make & make qemu
+  336  make clean
+  337  make
+  338  make qemu
+  339  make clean & make & make qemu
+  340  make clean
+  341  make
+  342  make qemu
+  343  make clean
+  344  make
+  345  make qemu
+  346  make clean
+  347  make
+  348  make qemu
+  349  make clean
+  350  make
+  351  make qemu
+  352  make clean
+  353  make
+  354  make qemu
+  355  make clean
+  356  make grade
+  357  make clean
+  358  make qemu
+  359  make clean
+  360  make
+  361  make qemu
+  362  make
+  363  make clean
+  364  make
+  365  make qemu
+  366  make grade
+  367  make clean
+  368  make qemu
+  369  make grade
+  370  make clean
+  371  make
+  372  make qemu
+  373  make clean
+  374  make tarball
+  375  git add.
+  376  git add .
+  377  git commit -am 'Lab 1'
+  378  git config user.email "jtyuan@pku.edu.cn"
+  379  git config user.name "Jiang Tianyuan"
+  380  git commit -am 'Lab 1'
+  381  ls
+  382  make clean
+  383  make tarball
+  384  ls
+  385  gdb
+  386  ls
+  387  objdump obj/kern/kernel -x
+  388  gdb
+  389  cd ..
+  390  ls
+  391  cd QE
+  392  cd QEMU/
+  393  vim Makefile.target 
+  394  ls
+  395  git clone http://pdos.csail.mit.edu/6.828/2014-jos.git lab
+  396  git clone https://github.com/geofft/qemu.git -b 6.828-1.7.0
+  397  ls
+  398  cd qemu/
+  399  ls
+  400  vim Makefile.target 
+  401  ls
+  402  cd /usr/local/bin/
+  403  ls
+  404  ll
+  405  rm qemu
+  406  sudo rm qemu
+  407  ln qemu-system-i386 qemu
+  408  sudo ln qemu-system-i386 qemu
+  409  ls
+  410  cd qemu/
+  411  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+  412  sudo aptitude install pixman
+  413  vim Makefile
+  414  vim Makefile.target 
+  415  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+  416  sudo aptitude install libpixman-1-dev
+  417  ./configure --disable-kvm --target-list="i386-softmmu x86_64-softmmu"
+  418  sudo make -j 4
+  419  sudo make install
+  420  cd ..
+  421  ls
+  422  cd Desktop/oslab/JOS2014/
+  423  ls
+  424  cd ..
+  425  ls
+  426  cd ..
+  427  ls
+  428  cd lab/
+  429  ls
+  430  cd ..
+  431  ls
+  432  cd Desktop/
+  433  ls
+  434  cd JOS2014/
+  435  ls
+  436  cd 
+  437  cd ..
+  438  cd so
+  439  cd os
+  440  cd bilibili/Desktop/oslab/JOS2014/
+  441  ls
+  442  make qemu
+  443  ls
+  444  make qemu
+  445  exit
+  446  cd lab/
+  447  sudo virsh list
+  448  sudo apt-get install libvirtd
+  449  sudo virsh list
+  450  sudo virsh shutdown guest_001
+  451  make qemu
+  452  ls
+  453  cd lab/
+  454  ls
+  455  subl
+  456  ls
+  457  cd boot/
+  458  ls
+  459  cd ..
+  460  ls
+  461  cd lib/
+  462  ls
+  463  vim printfmt.c 
+  464  cd ..
+  465  ls
+  466  cd kern/
+  467  ls
+  468  vim monitor.c
+  469  vim kdebug.c
+  470  cd ..
+  471  make
+  472  make grade
+  473  git add -a
+  474  git add -A
+  475  git commit -am 'Lab one'
+  476  git c
+  477  git config user.name "Jiang Tianyuan"
+  478  git commit -am 'Lab 1'
+  479  make tarball
+  480  ls
+  481  make handin
+  482  git checkout -b lab2 origin/lab2
+  483  ls
+  484  git merge lab1
+  485  ./grade-lab1
+  486  make grade
+  487  git checkout lab1
+  488  git checkout -b lab1 origin/lab1
+  489  ls
+  490  ./grade-lab1 
+  491  git pull
+  492  ls
+  493  make
+  494  make clean
+  495  make
+  496  make grade
+  497  ls
+  498  ./grade-lab1 
+  499  git checkout -b lab2 origin/lab2
+  500  ls
+  501  git checkout -b lab2
+  502  git checkout lab2
+  503  ls
+  504  ./grade-lab1
+  505  ls
+  506  checkout lab1
+  507  git checkout lab1
+  508  ls
+  509  ./grade-lab1 
+  510  make clean
+  511  make
+  512  ./grade-lab1 
+  513  make clean
+  514  ls
+  515  rm lab1-handin.tar.gz 
+  516  ls
+  517  git add .
+  518  git commit -am 'Lab 1 done'
+  519  git push
+  520  ls
+  521  git checkout lab2
+  522  ls
+  523  ./grade-lab1
+  524  ls
+  525  cd kern/
+  526  ls
+  527  cd ..
+  528  ls
+  529  vim answers-lab2.txt
+  530  ls
+  531  add
+  532  add -f 6.828
+  533  git add -f 6.828
+  534  make qemu
+  535  make clean
+  536  make
+  537  make qemu
+  538  make clean
+  539  make qemu
+  540  qemu
+  541  make qemu
+  542  make qemu -no-graphics
+  543  make qemu -h
+  544  make
+  545  make clean
+  546  make
+  547  make clean
+  548  make
+  549  make qemu
+  550  make clean
+  551  make
+  552  make qemu
+  553  make clean
+  554  make qemu
+  555  make clean
+  556  make 
+  557  make clean
+  558  make
+  559  make clean
+  560  make
+  561  make qemu-gdb
+  562  virsh
+  563  sudo apt-get install libvirt-bin
+  564  virsh
+  565  virsh list
+  566  sudo virsh list
+  567  make qemu
+  568  make
+  569  make qemu
+  570  make clean & make qemu
+  571  make qemu
+  572  make clean & make qemu
+  573  make clean; make qemu
+  574  make qemu
+  575  make clean
+  576  make qemu
+  577  make clean
+  578  make qemu
+  579  lab
+  580  cd lab/
+  581  gdb
+  582  cd os
+  583  cd la
+  584  cd lab/
+  585  make
+  586  make clean
+  587  make
+  588  make qemu
+  589  make clean
+  590  make
+  591  make qemu
+  592  make clean
+  593  make
+  594  make qemu
+  595  make clean
+  596  make
+  597  make qemu
+  598  make clean
+  599  make
+  600  make qemu
+  601  make clean
+  602  make
+  603  make qemu
+  604  make clean
+  605  make qemu
+  606  make clean
+  607  make
+  608  make qemu
+  609  make clean
+  610  make qemu
+  611  make clean
+  612  make
+  613  make qemu
+  614  cd lab/
+  615  make qemu
+  616  make clean
+  617  make qemu
+  618  ls
+  619  make clean
+  620  make qemu
+  621  make
+  622  make qemu
+  623  make clean
+  624  make
+  625  make qemu
+  626  make clean
+  627  make
+  628  make qemu
+  629  make clean
+  630  make qemu
+  631  make
+  632  clear
+  633  make
+  634  make qemu
+  635  make clean
+  636  make
+  637  make qemu
+  638  make grade
+  639  make clean
+  640  make grade
+  641  make clean
+  642  make grade
+  643  make clean
+  644  make grade
+  645  make gtade
+  646  make grade
+  647  make qemu
+  648  make grade
+  649  make qemu
+  650  make grade
+  651  make qemu
+  652  make grade
+  653  make qemu
+  654  make grade
+  655  make qemu
+  656  make grade
+  657  make qemu
+  658  make grade
+  659  make gdb
+  660  make qemu-gdb
+  661  make grade
+  662  gdb
+  663  make
+  664  gdb
+  665  sudo reboot
+  666  cd lab/
+  667  gdb
+  668  cd lab/
+  669  ls
+  670  make qemu-gdb
+  671  make grade
+  672  make qemu-gdb
+  673  cd ../Desktop/Untitled\ Folder/lab2-handin/
+  674  ls
+  675  make grade
+  676  make clean
+  677  make grade
+  678  make clean
+  679  make grade
+  680  make clean
+  681  make 
+  682  make grade
+  683  chmod 700 grade-lab2.sh 
+  684  ./grade-lab2.sh 
+  685  make qemu-gdb
+  686  cd ..
+  687  ls
+  688  cd DE
+  689  cd Desktop/
+  690  ls
+  691  cd Untitled\ Folder/
+  692  ls
+  693  cd lab2-handin/
+  694  ls
+  695  make grade
+  696  vim grade-lab2.sh 
+  697  ls
+  698  vim GNUmakefile 
+  699  vim make 
+  700  ls
+  701  vim Initialization 
+  702  vim mergedep.pl 
+  703  cd lab
+  704  git add .
+  705  git commit -am 'Lab 2 basics'
+  706  git blame
+  707  git log
+  708  git reset
+  709  ls
+  710  git reset -h
+  711  git branch lab2pse
+  712  git checkout lab2pse 
+  713  make grade
+  714  git checkout lab2
+  715  git add .
+  716  git branch 
+  717  git checkout lab2pse 
+  718  git branch 
+  719  make grade
+  720  make qemu
+  721  make grade
+  722  make qemu
+  723  clear
+  724  make clean
+  725  make qem
+  726  make qemu
+  727  make grade
+  728  make qemu
+  729  make grade
+  730  make qemu
+  731  make grade
+  732  make qemu
+  733  make grade
+  734  make qemu
+  735  make grade
+  736  make qemu
+  737  make grade
+  738  make qemu-gdb
+  739  make grade
+  740  make qemu
+  741  make qemu-gdb
+  742  make qemu
+  743  make grade
+  744  make qemu
+  745  make grade
+  746  make
+  747  make grade
+  748  make qemu
+  749  make grade
+  750  git add .
+  751  git commit -am 'basic PSE'
+  752  make qemu
+  753  make qemu-gdb
+  754  make qemu
+  755  make grade
+  756  make qemu
+  757  gdb
+  758  make qemu
+  759  git add .
+  760  git commit -am 'Lab2 Ch1 done'
+  761  man git add
+  762  git add
+  763  man git add
+  764  man git commit
+  765  gdb
+  766  make qemu
+  767  make grade
+  768  make qemu
+  769  make qemu-gdb
+  770  make qemu
+  771  make grade
+  772  make qemu
+  773  gdb
+  774  make gdb
+  775  gdb
+  776  cd lab/
+  777  ls
+  778  make qemu
+  779  ls
+  780  cat gradelib.py
+  781  less gradelib.py
+  782  make qemu-gdb
+  783  make qemu
+  784  top
+  785  make qemu
+  786  man git
+  787  make qemu
+  788  make grade
+  789  make 
+  790  make qemu
+  791  gdb
+  792  make qemu
+  793  git remote add notorigin git@github.com:jtyuan/JOS2014.git
+  794  git push -u notorigin master
+  795  git add -A
+  796  git add -A .
+  797  git commit -m 'lab 2 initial'
+  798  git push
+  799  git push -u notorigin master
+  800  git push -u notorigin lab2
+  801  history
+  802  git push -u notorigin lab2
+  803  git remote -l
+  804  git remote
+  805  git remote remove notorigin 
+  806  git add remote notorigin https://github.com/jtyuan/JOS2014.git
+  807  git remote add notorigin https://github.com/jtyuan/JOS2014.git
+  808  git push -u notorigin lab2
+  809  ls
+  810  git branch
+  811  git push -u notorigin lab2pse
+  812  git push -u notorigin lab1
+  813  ls
+  814  git branch
+  815  ls
+  816  vim README.md
+  817  git add .
+  818  git commit -m 'add readme'
+  819  git push
+  820  make qemu
+  821  make
+  822  make qemu
+  823  make qemu-gdb
+  824  make qemu
+  825  git add -A .
+  826  git commit -m 'add debugging functions'
+  827  git push
+  828  make qemu
+  829  git add .
+  830  git status
+  831  git commit -m 'minor fix'
+  832  git push
+  833  branch lab2
+  834  git branch lab2
+  835  git checkout lab2
+  836  git checkout lab2pse 
+  837  git checkout lab2
+  838  git checkout lab2pse 
+  839  make qemu
+  840  git checkout lab2
+  841  git brach
+  842  git branch
+  843  git add .
+  844  git commit -am 'minor fix'
+  845  git checkout lab2
+  846  make qemu
+  847  make qemu -m 128
+  848  make qemu -m 128M
+  849  ls
+  850  vim GNUmakefile 
+  851  qemu -m 256M -hda obj/kern/kernel.img -serial mon:stdio -gdb tcp::26000 -D qemu.log 
+  852  gmake qemu
+  853  make qemu
+  854  make qemu-gdb
+  855  gdb
+  856  ls
+  857  cd conf/
+  858  ls
+  859  vim env.mk 
+  860  vim lab.mk 
+  861  vim env.mk 
+  862  make qemu
+  863  cd ..
+  864  make qemu
+  865  echo qemu -m
+  866  make qemu
+  867  qemu -m 128M
+  868  make qemu
+  869  git checkout lab2pse 
+  870  make qemu
+  871  git add .
+  872  git commit -am 'minor fix'
+  873  git push
+  874  l
+  875  make grade
+  876  make qemu
+  877  ls
+  878  vim GNUmakefile 
+  879  make qemu
+  880  dump 0xefff8001 0xffffffff
+  881  make qemu
+  882  make qemu-gdb
+  883  make qemu
+  884  make qemu-gdb
+  885  git status
+  886  git add .
+  887  git commit -am 'minor fix'
+  888  git push
+  889  ls
+  890  git branch
+  891  git branch lab2ch4
+  892  git branch
+  893  git checkout lab2ch4 
+  894  ls
+  895  git checkout lab2pse
+  896  git branch
+  897  make clean
+  898  git make tarball
+  899  make tarball
+  900  ls
+  901  git checkout lab2
+  902  make tarball
+  903  make clean
+  904  make tarball
+  905  git checkout lab2pse 
+  906  make tarball
+  907  git add .
+  908  git commic -am 'modified README.md'
+  909  git commit -am 'modified README.md'
+  910  git push
+  911  make clean
+  912  make qemu
+  913  shutdown
+  914  make qemu
+  915  quit
+  916  make clean
+  917  make tarball
+  918  make grade
+  919  make clean
+  920  git checkout lab2
+  921  make grade
+  922  make qemu
+  923  git add .
+  924  git commit -am 'add answer-lab2.txt'
+  925  git push
+  926  make clean
+  927  make tarball
+  928  gdb
+  929  make
+  930  gdb
+  931  make\
+  932  make
+  933  gdb
+  934  cd lab
+  935  git branch lab3 origin/lab3
+  936  git checkout -b lab3 origin/lab3
+  937  git branch help
+  938  git branch
+  939  git branch remove lab3
+  940  git branch
+  941  git branch -D remove
+  942  git branch -D lab3
+  943  git checkout -b lab3 origin/lab3
+  944  git merge lab2
+  945  make clean
+  946  make grade
+  947  ls
+  948  git diff
+  949  git merge lab2pse
+  950  git branch -D lab3
+  951  git checkout lab2pse
+  952  git branch -D lab3
+  953  git branch
+  954  git checkout lab2pse
+  955  cd lab
+  956  git checkout lab2pse
+  957  git branch
+  958  git merge
+  959  git add .
+  960  git commit -am '?'
+  961  git merge
+  962  git checkout lab2pse 
+  963  git branch -D lab3
+  964  git checkout -b lab3 origin/lab3
+  965  git merge lab2pse
+  966  git add .
+  967  git commic -am 'fix merge conflict'
+  968  git commit -am 'fix merge conflict'
+  969  git merge lab2pse
+  970  make grade
+  971  make clean
+  972  makeq emu
+  973  make qemu
+  974  git diff
+  975  git diff lab2pse
+  976  make qem
+  977  make qemu
+  978  git branch
+  979  git checkout lab2pse 
+  980  git add .
+  981  git commit -am 'tbd'
+  982  git checkout lab2pse 
+  983  git branch -r
+  984  git branch remove lab3
+  985  git checkout -b lab3
+  986  git branch
+  987  man git branch
+  988  git branch -d lab3
+  989  git branch -D lab3
+  990  git branch -D remove
+  991  git checkout -b lab3
+  992  git checkout lab2pse 
+  993  git branch -D lab3
+  994  git checkout -b lab3 origin/lab3
+  995  git merge lab2pse
+  996  git add .
+  997  git commit -am 'lab3:initial push'
+  998  git merge lab2pse
+  999  git push
+ 1000  git remote
+ 1001  git push -u notorigin/lab3
+ 1002  git push -u notorigin
+ 1003  history
+ 1004  history > tmp

@@ -1,0 +1,243 @@
+#### Question 1
+
+>What is the purpose of having an individual handler function for each exception/interrupt? (i.e., if all exceptions/interrupts were delivered to the same handler, what feature that exists in the current implementation could not be provided?)
+
+分别使用handler是为了能够方便快捷地直接为对应的异常/中断找到处理函数的入口，如果使用统一的handler处理所有的中断，需要添加参数来表示这是哪一个中断，而且对于errorcode需要进行判断才能决定是否要压入一个0来做padding还是系统已经自动地压入了。
+
+#### Question 2
+
+>Did you have to do anything to make the user/softint program behave correctly? The grade script expects it to produce a general protection fault (trap 13), but softint's code says `int $14`. Why should this produce interrupt vector 13? What happens if the kernel actually allows softint's `int $14` instruction to invoke the kernel's page fault handler (which is interrupt vector 14)?
+
+用户态没有权限直接触发page fault，因此产生general protection fault是正常的现象，无需进行修改。如果kernel允许用户`int $14`的话可能就会有错误的或者有恶意的程序疯狂地申请新的页，耗尽内存资源。
+
+
+#### Question 3
+
+>The break point test case will either generate a break point exception or a general protection fault depending on how you initialized the break point entry in the `IDT` (i.e., your call to `SETGATE` from `trap_init`). Why? How do you need to set it up in order to get the breakpoint exception to work as specified above and what incorrect setup would cause it to trigger a general protection fault?
+
+在`trap_init()`中调用`SETGATE`时将breakpoint异常特权级设置为`dpl=3`即可；未设置时用户态直接触发breakpoint会引发general protection fault。
+
+#### Question 4
+
+>What do you think is the point of these mechanisms, particularly in light of what the `user/softint` test program does?
+
+这种机制一是可以将用户(可)触发的中断与只有内核可以触发的中断区分开来，对于只有可以允许触发的中断可以以比较容易的方式直接进行操作，而不用再在里面检查权限；二是可以避免用户用某些方式破坏kernel或者窃取其他进程的私有数据。
+
+
+#### Challenge 1
+
+为了在`trap_init()`中能循环调用SETGATE，需要将这些trap的handler放到一个全局的数组里；为了做到这一点需要将每一个handler的名称在`.data`中声明。修改后的`TRAPHANDLER`如下(`TRAPHANDLER_NOEC`类似)：
+
+```asm
+#define TRAPHANDLER(name, num)						\
+.data;\
+	.long name;\
+.text;\
+	.globl name;		/* define global symbol for 'name' */	\
+	.type name, @function;	/* symbol type is function */		\
+	.align 2;		/* align function definition */		\
+	name:			/* function starts here */		\
+	pushl $(num);							\
+	jmp _alltraps
+```
+
+根据Exercise 3中读到的各个Trap的使用情况，在`kern/trapentry.S`中声明handler数组：
+
+```asm
+.data
+	.globl handler
+	.align 4
+handler:
+.text
+/*
+ * Lab 3: Your code here for generating entry points for the different traps.
+ */
+	TRAPHANDLER_NOEC(handler0, T_DIVIDE);
+	TRAPHANDLER_NOEC(handler1, T_DEBUG);
+	TRAPHANDLER_NOEC(handler2, T_NMI);
+	TRAPHANDLER_NOEC(handler3, T_BRKPT);
+	TRAPHANDLER_NOEC(handler4, T_OFLOW);
+	TRAPHANDLER_NOEC(handler5, T_BOUND);
+	TRAPHANDLER_NOEC(handler6, T_ILLOP);
+	TRAPHANDLER_NOEC(handler7, T_DEVICE);
+	TRAPHANDLER(handler8, T_DBLFLT);
+	# TRAPHANDLER(handler9, 9);
+	dummy();
+	TRAPHANDLER(handler10, T_TSS);
+	TRAPHANDLER(handler11, T_SEGNP);
+	TRAPHANDLER(handler12, T_STACK);
+	TRAPHANDLER(handler13, T_GPFLT);
+	TRAPHANDLER(handler14, T_PGFLT);
+	# TRAPHANDLER(handler15, 15);
+	dummy();
+	TRAPHANDLER_NOEC(handler16, T_FPERR);
+	TRAPHANDLER_NOEC(handler17, T_ALIGN);
+	TRAPHANDLER_NOEC(handler18, T_MCHK);
+	TRAPHANDLER_NOEC(handler19, T_SIMDERR);
+```
+
+其中`dummy()`用于占位，否则数组中元素对应的trapno会错位。`dummy`定义如下：
+
+```asm
+#define dummy()\
+.data;\
+	.long 0
+```
+
+
+最后完成`kern/trap.c`中`trap_init`即可，其中3号Trap需要在用户态触发所以dpl为3：
+
+```c
+void
+trap_init(void)
+{
+	extern struct Segdesc gdt[];
+
+	// LAB 3: Your code here.
+	extern void (*handler[])();
+	int dpl;
+	
+	int i;
+	for (i = 0; i <= 19; i++) {
+		if (i != 9 && i != 15) {
+			dpl = 0;
+			if (i == T_BRKPT)
+				dpl = 3;
+			SETGATE(idt[i], 0, GD_KT, handler[i], dpl);
+		}
+	}
+
+	// Per-CPU setup 
+	trap_init_percpu();
+}
+
+```
+
+#### Challenge 2
+
+>Modify the JOS kernel monitor so that you can 'continue' execution from the current location (e.g., after the `int3`, if the kernel monitor was invoked via the breakpoint exception), and so that you can single-step one instruction at a time. You will need to understand certain bits of the `EFLAGS` register in order to implement single-stepping.
+
+>Optional: If you're feeling really adventurous, find some x86 disassembler source code - e.g., by ripping it out of QEMU, or out of GNU binutils, or just write it yourself - and extend the JOS kernel monitor to be able to disassemble and display instructions as you are stepping through them. Combined with the symbol table loading from lab 2, this is the stuff of which real kernel debuggers are made.
+
+`EFLAGS`的每一位具体含义在`inc/mmu.h`中定义，其中`FL_TF`为单步中断的标记。
+
+开启单步：
+
+```c
+int
+jdb_si(int argc, char **argv, struct Trapframe *tf) {
+	if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+		return -1;
+
+	tf->tf_eflags |= FL_TF;
+
+	return -1;
+}
+```
+
+关闭单步：
+
+```c
+int jdb_con(int argc, char **argv, struct Trapframe *tf) {
+	if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+		return -1;
+
+	tf->tf_eflags &= ~FL_TF;
+	return -1;
+}
+```
+
+把这两个函数加入`monitor.c`即可完成single-stepping和continue。
+
+后来想要模仿一下gdb，就专门加了一个指令jdb：
+
+```c
+static struct Command commands[] = {
+	...
+	{ "jdb", "Run JOS debugger", mon_jdb },
+};
+```
+
+```c
+int
+mon_jdb(int argc, char **argv, struct Trapframe *tf) {
+	monitor_jdb(tf);
+	return -1;
+}
+```
+
+其中`monitor_jdb`是我重新写的一个monitor，会输出当前地址，并调用我重写的`runcmd_jdb`来处理指令：
+
+```c
+void
+monitor_jdb(struct Trapframe *tf)
+{
+	char *buf;
+
+	if (tf) 
+		cprintf("=> 0x%08x\n", tf->tf_eip);
+
+	while (1) {
+		buf = readline("(jdb) ");
+		if (buf != NULL)
+			if (runcmd_jdb(buf, tf) < 0)
+				break;
+	}
+}
+```
+
+```c
+static int
+runcmd_jdb(char *buf, struct Trapframe *tf)
+{
+	int argc;
+	char *argv[MAXARGS];
+	int i;
+
+	// Parse the command buffer into whitespace-separated arguments
+	argc = 0;
+	argv[argc] = 0;
+	while (1) {
+		// gobble whitespace
+		while (*buf && strchr(WHITESPACE, *buf))
+			*buf++ = 0;
+		if (*buf == 0)
+			break;
+
+		// save and scan past next arg
+		if (argc == MAXARGS-1) {
+			cprintf("Too many arguments (max %d)\n", MAXARGS);
+			return 0;
+		}
+		argv[argc++] = buf;
+		while (*buf && !strchr(WHITESPACE, *buf))
+			buf++;
+	}
+	argv[argc] = 0;
+
+	// Lookup and invoke the command
+	if (argc == 0)
+		return 0;
+	for (i = 0; i < NCOMMANDS_DEBUG; i++) {
+		if (strcmp(argv[0], commands_debug[i].name) == 0)
+			return commands_debug[i].func(argc, argv, tf);
+	}
+	cprintf("Unknown command '%s'\n", argv[0]);
+	return 0;
+}
+```
+
+`commands_debug`里存放的就是刚才写的那两个single-stepping和continue的函数：
+
+```c
+static struct Command commands_debug[] = {
+	{ "help", "Display this list of commands", jdb_help },
+	{ "si", "Single Step", jdb_si },
+	{ "c", "Continue execution", jdb_con },
+	{ "quit", "Exit debugger", jdb_quit },
+};
+```
+
+**测试**：执行`user/breakpoint`后单步2次，再continue
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1er5at1tu9tj20vc0mkq9a.jpg =600x)
