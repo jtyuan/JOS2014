@@ -1,36 +1,25 @@
-/*********************************************************
-Programmer  : EOF
-E-mail      : jasonleaster@gmail.com
-Date        : 2015.04.23
-File        : sfork.c
-
-Description:
-    This code is used for tesing function @sfork which
-is implement in lib/fork.c
-
-**********************************************************/
 #include <inc/lib.h>
 
-uint32_t val = 0;
+uint32_t share_val = 0;
 
-void umain(int argc, char* argv[])
-{
+void umain(int argc, char* argv[]) {
     envid_t who;
-    if((who = sfork()) == 0)
-    {
-        cprintf("in child val = %d\n", val);
-        val = 2;
+    if((who = sfork()) == 0) {
+        cprintf("child: %d\n", share_val);
+        share_val = 1000;
         sys_yield();
-        cprintf("in child val = %d\n", val);
-        val = 10;
-
+        cprintf("child: %d\n", share_val);
+        share_val = 10000;
         return;
     }
 
+
     sys_yield();
-    cprintf("in parent  val = %d\n", val);
-    val++;
     sys_yield();
-    cprintf("in parent  val = %d\n", val);
-    return ;
+    cprintf("parent: %d\n", share_val);
+    share_val++;
+    sys_yield();
+    sys_yield();
+    cprintf("parent: %d\n", share_val);
+    return;
 }

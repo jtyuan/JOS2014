@@ -140,10 +140,99 @@ fork(void)
 	panic("fork not implemented");
 }
 
+envid_t
+pfork(int priority)
+{
+	int r;
+	envid_t envid;
+	uintptr_t addr;
+
+	set_pgfault_handler(pgfault);
+
+	if ((envid = sys_exofork()) == 0) {
+		// child
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	for (addr = 0; addr < USTACKTOP; addr += PGSIZE) {
+		if ((uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P)
+			&& (uvpt[PGNUM(addr)] & PTE_U))
+			duppage(envid, PGNUM(addr));
+	}
+
+	if ((r = sys_page_alloc(envid, (void *) (UXSTACKTOP - PGSIZE), 
+		PTE_P | PTE_U | PTE_W)) < 0)
+		panic("fork: %e", r);
+
+	extern void _pgfault_upcall();
+	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+		panic("fork: %e", r);
+
+	if ((r = sys_env_set_priority(envid, priority)) < 0)
+		panic("fork: %e", r);
+
+	return envid;
+	panic("fork not implemented");
+}
+
+
 // Challenge!
 int
 sfork(void)
 {
-	panic("sfork not implemented");
-	return -E_INVAL;
+	envid_t envid, thisenvid = sys_getenvid();
+	int perm;
+	int r;
+	uint32_t i, j, pn;
+
+	set_pgfault_handler(pgfault);
+
+	if ((envid = sys_exofork()) == 0) {
+		// child
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	for (i = PDX(UXSTACKTOP-PGSIZE); i >= PDX(UTEXT) ; i--) {
+		if (uvpd[i] & PTE_P) {
+			for (j = 0; j < NPTENTRIES; j++) {
+				pn = PGNUM(PGADDR(i, j, 0));
+				if (pn == PGNUM(UXSTACKTOP-PGSIZE))
+					break;
+
+				if (pn == PGNUM(USTACKTOP-PGSIZE))
+					 duppage(envid, pn);
+				else if (uvpt[pn] & PTE_P) {   
+
+					perm = uvpt[pn] & ~(uvpt[pn] & ~(PTE_P |PTE_U | PTE_W | PTE_AVAIL));
+					
+					if ((r = sys_page_map(thisenvid, (void *)(PGADDR(i, j, 0)), 
+							envid, (void *)(PGADDR(i, j, 0)), perm)) < 0)
+						return r;
+				}
+			}
+		}
+	}
+
+	if ((r = sys_page_alloc(envid, (void *)(UXSTACKTOP - PGSIZE), PTE_U | PTE_P | PTE_W)) < 0)
+		return r;
+
+	if ((r = sys_page_map(envid, (void *)(UXSTACKTOP - PGSIZE), thisenvid, PFTEMP, PTE_U | PTE_P | PTE_W)) < 0)
+		return r;
+
+	memmove((void *)(UXSTACKTOP - PGSIZE), PFTEMP, PGSIZE);
+
+	if ((r = sys_page_unmap(thisenvid, PFTEMP)) < 0)
+		return r;
+
+	extern void _pgfault_upcall(void);
+	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+		return r;
+
+	return envid;
 }

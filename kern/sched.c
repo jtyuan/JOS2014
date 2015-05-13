@@ -38,8 +38,16 @@ sched_yield(void)
 
 	for (i = 0; i < NENV; ++i) {
 		k = (envidx + i) % NENV;
-		if (envs[k].env_status == ENV_RUNNABLE)
-			env_run(&envs[k]);
+		if (envs[k].env_status == ENV_RUNNABLE) {
+			// cprintf("env[%d] %d\n", k, envs[k].env_cur_pr);
+			if (curenv == NULL || envs[k].env_cur_pr > curenv->env_cur_pr) {
+				cprintf("env[%d] is taking over with priority %d\n", k, envs[k].env_cur_pr);
+				envs[k].env_cur_pr = envs[k].env_def_pr;
+				env_run(&envs[k]);
+			} else {
+				envs[k].env_cur_pr++;
+			}
+		}
 	}
 	if (curenv && curenv->env_status == ENV_RUNNING)
 		env_run(curenv);
