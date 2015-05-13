@@ -24,15 +24,13 @@ pgfault(struct UTrapframe *utf)
 	//   Use the read-only page table mappings at uvpt
 	//   (see <inc/memlayout.h>).
 
+	// LAB 4: Your code here.
+
 	if (!(
-			(err & FEC_WR) && 
-			(uvpd[PDX(addr)] & PTE_P) &&
-			(uvpt[PGNUM(addr)] & PTE_P) && 
-			(uvpt[PGNUM(addr)] & PTE_COW)
+			(err & FEC_WR) && (uvpd[PDX(addr)] & PTE_P) &&
+			(uvpt[PGNUM(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_COW)
 		))
 		panic("pgfault: faulting access is either not a write or not to a COW page");
-
-	// LAB 4: Your code here.
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
 	// copy the data from the old page to the new page, then move the new
@@ -41,7 +39,6 @@ pgfault(struct UTrapframe *utf)
 	//   You should make three system calls.
 
 	// LAB 4: Your code here.
-
 
 	addr = ROUNDDOWN(addr, PGSIZE);
 	if ((r = sys_page_alloc(0, PFTEMP, PTE_P | PTE_U | PTE_W)) < 0)
