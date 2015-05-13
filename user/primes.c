@@ -18,18 +18,20 @@ primeproc(void)
 
 	// fetch a prime from our left neighbor
 top:
+// cprintf("fuckme1\n");
 	p = ipc_recv(&envid, 0, 0);
 	cprintf("CPU %d: %d ", thisenv->env_cpunum, p);
-
+// cprintf("fuckme1.5\n");
 	// fork a right neighbor to continue the chain
 	if ((id = fork()) < 0)
 		panic("fork: %e", id);
 	if (id == 0)
 		goto top;
-
+// cprintf("fuckme2\n");
 	// filter out multiples of our prime
 	while (1) {
 		i = ipc_recv(&envid, 0, 0);
+		cprintf("???? %d\n", p);
 		if (i % p)
 			ipc_send(id, i, 0, 0);
 	}

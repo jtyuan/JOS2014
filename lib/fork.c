@@ -118,6 +118,7 @@ fork(void)
 
 	if ((envid = sys_exofork()) == 0) {
 		// child
+		thisenv = &envs[ENVX(sys_getenvid())];
 		return 0;
 	}
 
