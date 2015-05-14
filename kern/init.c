@@ -50,6 +50,7 @@ i386_init(void)
 
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
+	lock_kernel();
 
 	// Starting non-boot CPUs
 	boot_aps();
@@ -63,6 +64,10 @@ i386_init(void)
 #else
 	// Touch all you want.
 	ENV_CREATE(user_icode, ENV_TYPE_USER);
+	// ENV_CREATE(user_primes, ENV_TYPE_USER);
+	// ENV_CREATE(user_yield, ENV_TYPE_USER);
+	// ENV_CREATE(user_yield, ENV_TYPE_USER);
+	// ENV_CREATE(user_yield, ENV_TYPE_USER);
 #endif // TEST*
 
 	// Should not be necessary - drains keyboard because interrupt has given up.
@@ -122,6 +127,8 @@ mp_main(void)
 	// only one CPU can enter the scheduler at a time!
 	//
 	// Your code here:
+	lock_kernel();
+	sched_yield();
 
 	// Remove this after you finish Exercise 4
 	for (;;);
