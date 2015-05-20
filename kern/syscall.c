@@ -138,6 +138,16 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
 	// LAB 5: Your code here.
 	// Remember to check whether the user has supplied us with a good
 	// address!
+	struct Env *env;
+	if (envid2env(envid, &env, 1) < 0)
+		return -E_BAD_ENV;
+
+ 	// if (tf->tf_eip >= UTOP)
+ 	// 	return 
+ 	env->env_tf = *tf;
+ 	env->env_tf.tf_eflags |= FL_IF;
+
+	return 0;
 	panic("sys_env_set_trapframe not implemented");
 }
 
@@ -209,8 +219,6 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 
 	if (!(page=page_alloc(1)))
 		return -E_NO_MEM;
-
-	page->pp_ref++;
 
 	if (page_insert(env->env_pgdir, page, va, perm) < 0) {
 		page_free(page);
@@ -355,12 +363,6 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 	if (env->env_ipc_recving == 0)
 		return -E_IPC_NOT_RECV;
 	if (srcva < (void *) UTOP) {
-		// int flag = PTE_U | PTE_P;
-		// if ((perm & flag) != flag)
-		// 	return -E_INVAL;
-
-		// if (perm & (~(PTE_U | PTE_P | PTE_AVAIL | PTE_W)))
-		// 	return -E_INVAL;
 
 		if (srcva != ROUNDDOWN(srcva, PGSIZE))
 			return -E_INVAL;
@@ -370,7 +372,8 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 		if (!page)
 			return -E_INVAL;
 
-		if ((*pte & perm) != perm) return -E_INVAL;
+        if((perm & PTE_U) == 0 || (perm & PTE_P) == 0 || (perm & ~PTE_SYSCALL) != 0)
+            return -E_INVAL;
 
 		if ((perm & PTE_W) && !(*pte & PTE_W))
 			return -E_INVAL;
@@ -454,6 +457,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_ipc_recv((void *) a1);
 	case SYS_ipc_try_send:
 		return sys_ipc_try_send(a1, a2, (void *) a3, a4);
+	case SYS_env_set_trapframe:
+		return sys_env_set_trapframe(a1, (struct Trapframe *) a2);
 	default:
 		return -E_INVAL;
 	}
