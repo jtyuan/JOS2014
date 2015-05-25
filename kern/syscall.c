@@ -424,38 +424,49 @@ sys_ipc_recv(void *dstva)
 static int
 sys_exec(uint32_t eip, uint32_t esp, void * _ph, uint32_t phnum) {
 
+	int perm, i, r;
+	uint32_t etmp;
+	uint32_t vs, vt;
+	struct Proghdr * ph;
+	struct PageInfo * pg;
+
 	curenv->env_tf.tf_eip = eip;
 	curenv->env_tf.tf_esp = esp;
 
-	int perm, i;
-	uint32_t tmp = (uint32_t) UTEMP + 3 * PGSIZE; // ETEMP
-	uint32_t va, end;
-	struct PageInfo * pg;
-
-	struct Proghdr * ph = (struct Proghdr *) _ph; 
+	ph = (struct Proghdr *) _ph; 
+	etmp = (uint32_t) UTEMP + 3 * PGSIZE; // ETEMP
+	
 	for (i = 0; i < phnum; i++, ph++) {
+		
 		if (ph->p_type != ELF_PROG_LOAD)
 			continue;
+
 		perm = PTE_P | PTE_U;
+		
 		if (ph->p_flags & ELF_PROG_FLAG_WRITE)
 			perm |= PTE_W;
 
-		end = ROUNDUP(ph->p_va + ph->p_memsz, PGSIZE);
-		for (va = ROUNDDOWN(ph->p_va, PGSIZE); va != end; tmp += PGSIZE, va += PGSIZE) {
-			if ((pg = page_lookup(curenv->env_pgdir, (void *)tmp, NULL)) == NULL) 
+		vt = ROUNDUP(ph->p_va + ph->p_memsz, PGSIZE);
+		for (vs = ROUNDDOWN(ph->p_va, PGSIZE); vs < vt; etmp += PGSIZE, vs += PGSIZE) {
+			
+			if ((pg = page_lookup(curenv->env_pgdir, (void *) etmp, NULL)) == NULL) 
 				return -E_NO_MEM;
-			if (page_insert(curenv->env_pgdir, pg, (void *)va, perm) < 0)
-				return -E_NO_MEM;
-			page_remove(curenv->env_pgdir, (void *)tmp);
+			
+			if ((r = page_insert(curenv->env_pgdir, pg, (void *) vs, perm)) < 0)
+				return r;
+			
+			page_remove(curenv->env_pgdir, (void *) etmp);
 		}
 	}
 
-	if ((pg = page_lookup(curenv->env_pgdir, (void *)tmp, NULL)) == NULL) 
+	if ((pg = page_lookup(curenv->env_pgdir, (void *) etmp, NULL)) == NULL) 
 		return -E_NO_MEM;
-	if (page_insert(curenv->env_pgdir, pg, (void *)(USTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W) < 0) 
-		return -E_NO_MEM;
-	page_remove(curenv->env_pgdir, (void *)tmp);
-	cprintf("curenv->env_id\n", curenv->env_id);
+	
+	if ((r = page_insert(curenv->env_pgdir, pg, (void *) (USTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W)) < 0) 
+		return r;
+	
+	page_remove(curenv->env_pgdir, (void *) etmp);
+
 	env_run(curenv);
 	return 0;
 }

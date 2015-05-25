@@ -56,7 +56,7 @@ exec(const char *prog, const char **argv)
 		if ((r = map_segment(0, tmp_addr + PGOFF(ph->p_va), ph->p_memsz,
 				     fd, ph->p_filesz, ph->p_offset, perm)) < 0)
 			goto error;
-		tmp_addr += ROUNDDOWN(PGOFF(ph->p_va) + ph->p_filesz, PGSIZE);
+		tmp_addr += ROUNDUP(PGOFF(ph->p_va) + ph->p_filesz, PGSIZE);
 	}
 	close(fd);
 	fd = -1;
@@ -103,7 +103,7 @@ execl(const char *prog, const char *arg0, ...)
 	for(i=0;i<argc;i++)
 		argv[i+1] = va_arg(vl, const char *);
 	va_end(vl);
-	return spawn(prog, argv);
+	return exec(prog, argv);
 }
 
 
