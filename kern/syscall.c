@@ -4,6 +4,7 @@
 #include <inc/error.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/elf.h>
 
 #include <kern/env.h>
 #include <kern/pmap.h>
@@ -420,6 +421,46 @@ sys_ipc_recv(void *dstva)
 	return 0;
 }
 
+static int
+sys_exec(uint32_t eip, uint32_t esp, void * _ph, uint32_t phnum) {
+
+	curenv->env_tf.tf_eip = eip;
+	curenv->env_tf.tf_esp = esp;
+
+	int perm, i;
+	uint32_t tmp = (uint32_t) UTEMP + 3 * PGSIZE; // ETEMP
+	uint32_t va, end;
+	struct PageInfo * pg;
+
+	struct Proghdr * ph = (struct Proghdr *) _ph; 
+	for (i = 0; i < phnum; i++, ph++) {
+		if (ph->p_type != ELF_PROG_LOAD)
+			continue;
+		perm = PTE_P | PTE_U;
+		if (ph->p_flags & ELF_PROG_FLAG_WRITE)
+			perm |= PTE_W;
+
+		end = ROUNDUP(ph->p_va + ph->p_memsz, PGSIZE);
+		for (va = ROUNDDOWN(ph->p_va, PGSIZE); va != end; tmp += PGSIZE, va += PGSIZE) {
+			if ((pg = page_lookup(curenv->env_pgdir, (void *)tmp, NULL)) == NULL) 
+				return -E_NO_MEM;
+			if (page_insert(curenv->env_pgdir, pg, (void *)va, perm) < 0)
+				return -E_NO_MEM;
+			page_remove(curenv->env_pgdir, (void *)tmp);
+		}
+	}
+
+	if ((pg = page_lookup(curenv->env_pgdir, (void *)tmp, NULL)) == NULL) 
+		return -E_NO_MEM;
+	if (page_insert(curenv->env_pgdir, pg, (void *)(USTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W) < 0) 
+		return -E_NO_MEM;
+	page_remove(curenv->env_pgdir, (void *)tmp);
+	cprintf("curenv->env_id\n", curenv->env_id);
+	env_run(curenv);
+	return 0;
+}
+
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -459,6 +500,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_ipc_try_send(a1, a2, (void *) a3, a4);
 	case SYS_env_set_trapframe:
 		return sys_env_set_trapframe(a1, (struct Trapframe *) a2);
+	case SYS_exec:
+		return sys_exec(a1, a2, (void *) a3, a4);
 	default:
 		return -E_INVAL;
 	}

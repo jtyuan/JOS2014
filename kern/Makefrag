@@ -80,7 +80,8 @@ KERN_BINFILES +=	user/idle \
 KERN_BINFILES +=	user/testfile \
 			user/spawnhello \
 			user/icode \
-			fs/fs
+			fs/fs \
+			user/exechello
 
 # Binary files for LAB5
 KERN_BINFILES +=	user/testpteshare \
