@@ -11,6 +11,7 @@ int debug = 0;
 // Subsequent calls to 'gettoken(0, token)' will return subsequent
 // tokens from the string.
 int gettoken(char *s, char **token);
+void write_history(char *s);
 
 
 // Parse a shell command from string 's' and execute it.
@@ -22,17 +23,22 @@ void
 runcmd(char* s)
 {
 	char *argv[MAXARGS], *t, argv0buf[BUFSIZ];
-	int argc, c, i, r, p[2], fd, pipe_child;
+	int argc, c, i, r, p[2], fd, pipe_child, bg, more;
+	// cprintf("%s\n", s);
+
+	write_history(s);
 
 	pipe_child = 0;
 	gettoken(s, 0);
-
+// cprintf("%s\n", s);
 again:
 	argc = 0;
+	bg = 0;
+	more = 0;
 	while (1) {
 		switch ((c = gettoken(0, &t))) {
-
 		case 'w':	// Add an argument
+			// cprintf("t=%s\n",t);
 			if (argc == MAXARGS) {
 				cprintf("too many arguments\n");
 				exit();
@@ -112,6 +118,12 @@ again:
 			panic("| not implemented");
 			break;
 
+		case ';':
+			more = 1;
+			goto runit;
+		case '&':
+			bg = 1;
+			break;
 		case 0:		// String is complete
 			// Run the current command!
 			goto runit;
@@ -124,6 +136,7 @@ again:
 	}
 
 runit:
+	// cprintf("start running!\n");
 	// Return immediately if command line was empty.
 	if(argc == 0) {
 		if (debug)
@@ -154,17 +167,31 @@ runit:
 	if ((r = spawn(argv[0], (const char**) argv)) < 0)
 		cprintf("spawn %s: %e\n", argv[0], r);
 
+	// cprintf("spawn %s: %x\n", argv[0], r);
+
 	// In the parent, close all file descriptors and wait for the
 	// spawned command to exit.
 	close_all();
 	if (r >= 0) {
 		if (debug)
 			cprintf("[%08x] WAIT %s %08x\n", thisenv->env_id, argv[0], r);
-		wait(r);
+		if (!bg)
+			wait(r);
 		if (debug)
 			cprintf("[%08x] wait finished\n", thisenv->env_id);
 	}
 
+
+	if (r > 0 && more) {
+		if ((r = opencons()) < 0)
+			panic("opencons: %e", r);
+		if (r != 0)
+			panic("first opencons used fd %d", r);
+		if ((r = dup(0, 1)) < 0)
+			panic("dup: %e", r);
+		goto again;
+	}
+	
 	// If we were the left-hand part of a pipe,
 	// wait for the right-hand part to finish.
 	if (pipe_child) {
@@ -175,8 +202,34 @@ runit:
 			cprintf("[%08x] wait finished\n", thisenv->env_id);
 	}
 
+
 	// Done!
 	exit();
+}
+
+void write_history(char *s) {
+	int rfd, r, n;
+	struct Stat sta;
+
+	if (debug)
+		cprintf("HISOTRY: %s\n", s);
+
+
+	if ((rfd = open("/.history", O_RDWR | O_CREAT)) < 0)
+		panic("open /.history: %e", rfd);
+
+	if ((r = stat("/.history", &sta)) < 0)
+		panic("stat /.history: %e", r);
+
+	seek(rfd, sta.st_size);
+
+	for (n = 0; s[n]; n++);
+	s[n++] = '\n';
+	s[n] = '\0';
+	if ((r = write(rfd, s, n)) != n)
+		panic("write /.history: %e", r);
+
+	close(rfd);
 }
 
 
@@ -198,6 +251,7 @@ int
 _gettoken(char *s, char **p1, char **p2)
 {
 	int t;
+	static int inquote = 0;
 
 	if (s == 0) {
 		if (debug > 1)
@@ -213,6 +267,10 @@ _gettoken(char *s, char **p1, char **p2)
 
 	while (strchr(WHITESPACE, *s))
 		*s++ = 0;
+	if (inquote && *s == '"') {
+		inquote = 0;
+		*s++ = 0;
+	}
 	if (*s == 0) {
 		if (debug > 1)
 			cprintf("EOL\n");
@@ -228,7 +286,15 @@ _gettoken(char *s, char **p1, char **p2)
 		return t;
 	}
 	*p1 = s;
-	while (*s && !strchr(WHITESPACE SYMBOLS, *s))
+	// cprintf("--%s\n", s);
+	if (*s == '"') {
+		(*p1)++;
+		inquote = 1;
+		do {
+			s++;
+		} while (*s && *s != '"');
+	}
+	while (*s && !strchr(WHITESPACE SYMBOLS, *s) && *s != '"')
 		s++;
 	*p2 = s;
 	if (debug > 1) {
@@ -245,7 +311,6 @@ gettoken(char *s, char **p1)
 {
 	static int c, nc;
 	static char* np1, *np2;
-
 	if (s) {
 		nc = _gettoken(s, &np1, &np2);
 		return 0;
@@ -307,6 +372,11 @@ umain(int argc, char **argv)
 			if (debug)
 				cprintf("EXITING\n");
 			exit();	// end of file
+		}
+		if (buf[0] == SIGINT) {
+			if (debug)
+				cprintf("SIGINT detected, EXITING\n");
+			exit();
 		}
 		if (debug)
 			cprintf("LINE: %s\n", buf);

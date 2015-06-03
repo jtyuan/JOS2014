@@ -353,13 +353,20 @@ kbd_proc_data(void)
 		else if ('A' <= c && c <= 'Z')
 			c += 'a' - 'A';
 	}
-
+	// cprintf("shift - %x\n", shift);
+	// cprintf("CTL - %d\n", CTL);
+	// cprintf("ALT - %d\n", ALT);
+	// cprintf("data - 0x%x\n", data);
+	// cprintf("c - %c\n", C('C'));
 	// Process special keys
 	// Ctrl-Alt-Del: reboot
 	if (!(~shift & (CTL | ALT)) && c == KEY_DEL) {
 		cprintf("Rebooting!\n");
 		outb(0x92, 0x3); // courtesy of Chris Frost
 	}
+
+	if ((shift & CTL) && c == C('C'))
+		return SIGINT;
 
 	return c;
 }

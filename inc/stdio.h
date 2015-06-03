@@ -7,6 +7,10 @@
 #define NULL	((void *) 0)
 #endif /* !NULL */
 
+#ifndef SIGINT
+#define SIGINT	0x11
+#endif
+
 // lib/stdio.c
 void	cputchar(int c);
 int	getchar(void);

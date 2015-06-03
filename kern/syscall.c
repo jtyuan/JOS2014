@@ -143,8 +143,6 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
 	if (envid2env(envid, &env, 1) < 0)
 		return -E_BAD_ENV;
 
- 	// if (tf->tf_eip >= UTOP)
- 	// 	return 
  	env->env_tf = *tf;
  	env->env_tf.tf_eflags |= FL_IF;
 

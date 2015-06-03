@@ -28,7 +28,7 @@ lsdir(const char *path, const char *prefix)
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
-		if (f.f_name[0])
+		if (f.f_name[0] && f.f_name[0] != '.') // hide filename starts with '.'
 			ls1(prefix, f.f_type==FTYPE_DIR, f.f_size, f.f_name);
 	if (n > 0)
 		panic("short read in directory %s", path);
@@ -40,7 +40,6 @@ void
 ls1(const char *prefix, bool isdir, off_t size, const char *name)
 {
 	const char *sep;
-
 	if(flag['l'])
 		printf("%11d %c ", size, isdir ? 'd' : '-');
 	if(prefix) {
@@ -81,7 +80,7 @@ umain(int argc, char **argv)
 			usage();
 		}
 
-	if (argc == 1)
+	if (argc == 1) 
 		ls("/", "");
 	else {
 		for (i = 1; i < argc; i++)
