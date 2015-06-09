@@ -77,6 +77,7 @@ open(const char *path, int mode)
 	int r, fdnum;
 	struct Fd *fd;
 	struct Stat st;
+	// cprintf("%s\n",path);
 	
 	if (strlen(path) >= MAXPATHLEN)
 		return -E_BAD_PATH;
@@ -86,7 +87,8 @@ open(const char *path, int mode)
 	
 	strcpy(fsipcbuf.open.req_path, path);
 	
-	fsipcbuf.open.req_omode = mode;
+	// fsipcbuf.open.req_omode = mode;
+	fsipcbuf.open.req_omode = (mode | O_RDWR) & ~O_TRUNC;
 	
 	if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
 		fd_close(fd, 0);
@@ -98,12 +100,27 @@ open(const char *path, int mode)
 	if ((r = fstat(fdnum, &st)) < 0)
 		panic("stat %s: %e", path, r);
 	
+
 	if (st.st_islink && !(mode & O_LINK)) {
+		// cprintf("????\n");
 		read(fdnum, tmp_path, st.st_size);
+		close(fdnum);
 		return open(tmp_path, mode);
+	} else {
+		close(fdnum);
+		if ((r = fd_alloc(&fd)) < 0)
+			return r;
+		// cprintf("again %s\n", path);
+		strcpy(fsipcbuf.open.req_path, path);
+		fsipcbuf.open.req_omode = mode & ~O_EXCL;
+		if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
+			fd_close(fd, 0);
+			return r;
+		}
+		// cprintf("ffff\n");
+		return fd2num(fd);
 	}
-	
-	return fdnum;
+
 }
 
 // Flush the file descriptor.  After this the fileid is invalid.
