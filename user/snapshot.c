@@ -60,7 +60,7 @@ ss1(const char *prefix, bool isdir, off_t size, const char *name, const char *ts
 		strcat(dst_path, "@");
 		strcat(dst_path, ts);
 		cprintf("%s %s\n", src_path, dst_path);
-		if ((r = spawnl("/cp", "-r", src_path, dst_path, (char*)0)) < 0)
+		if ((r = spawnl("/cp", "cp", "-r", src_path, dst_path, (char*)0)) < 0)
 			panic("icode: spawn /init: %e", r);
 	}
 }
@@ -75,16 +75,16 @@ cat_path(char *dst, const char *src)
 
 bool is_snapshot(const char *name)
 {
-	char *pos = strchr(name, '@');
+	char *pos = strrchr(name, '@');
 	if (pos == NULL)
 		return false;
-	while (pos) {
+	while (*(++pos)) {
 		if (!isdigit(*pos))
 			return false;
-		pos++;
 	}
 	return true;
 }
+
 
 void
 usage(void)

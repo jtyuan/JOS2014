@@ -223,8 +223,7 @@ ssize_t
 readn(int fdnum, void *buf, size_t n)
 {
 	int m, tot;
-	cprintf("test %d %x %d\n", fdnum, buf, n);
-
+	
 	for (tot = 0; tot < n; tot += m) {
 		m = read(fdnum, (char*)buf + tot, n - tot);
 		if (m < 0)
