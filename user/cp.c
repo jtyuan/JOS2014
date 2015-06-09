@@ -131,7 +131,7 @@ bool is_snapshot(const char *name)
 void
 cat_path(char *dst, const char *src)
 {
-	if (dst[strlen(dst)-1] != '/')
+	if (dst[strlen(dst)-1] != '/' && src[0] != '/')
 		strcat(dst, "/");
 	strcat(dst, src);
 }

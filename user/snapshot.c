@@ -2,6 +2,7 @@
 
 int flag;
 int recur;
+int verbose;
 
 void ssdir(const char*, const char*);
 void ss1(const char*, bool, off_t, const char*, const char*);
@@ -62,13 +63,15 @@ ss1(const char *prefix, bool isdir, off_t size, const char *name, const char *ts
 		cprintf("%s %s\n", src_path, dst_path);
 		if ((r = spawnl("/cp", "cp", "-r", src_path, dst_path, (char*)0)) < 0)
 			panic("icode: spawn /init: %e", r);
+		if (r > 0)
+			wait(r);
 	}
 }
 
 void
 cat_path(char *dst, const char *src)
 {
-	if (dst[strlen(dst)-1] != '/')
+	if (dst[strlen(dst)-1] != '/' && src[0] != '/')
 		strcat(dst, "/");
 	strcat(dst, src);
 }
@@ -90,7 +93,7 @@ void
 usage(void)
 {
 	// naïve/cow/incremental
-	printf("usage: snapshot [-(n|c|i)r] [file...]\n");
+	printf("usage: snapshot [-(n|c|i)rv] [file...]\n");
 	exit();
 }
 
@@ -105,6 +108,7 @@ umain(int argc, char **argv)
 
 	flag = 'n';
 	recur = 0;
+	verbose = 0;
 
 	argstart(&argc, argv, &args);
 	while ((i = argnext(&args)) >= 0)
@@ -116,6 +120,10 @@ umain(int argc, char **argv)
 			break;
 		case 'r':
 			recur = 1;
+			break;
+		case 'v':
+			verbose = 1;
+			break;
 		default:
 			usage();
 		}
