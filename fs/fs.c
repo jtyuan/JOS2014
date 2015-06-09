@@ -257,6 +257,8 @@ dir_alloc_file(struct File *dir, struct File **file)
 		return r;
 	f = (struct File*) blk;
 	*file = &f[0];
+	(*file)->f_link_offset = FILE_CLEAN;
+	(*file)->f_link_len = FILE_CLEAN;
 	return 0;
 }
 
@@ -438,17 +440,39 @@ file_read(struct File *f, void *buf, size_t count, off_t offset)
 int
 file_write(struct File *f, const void *buf, size_t count, off_t offset)
 {
-	int r, bn;
+	int r, bn, wr_cnt;
 	off_t pos;
 	char *blk;
-	char link_path[512];
+	struct File *dir, *f1, *f2;
+	char name[MAXNAMELEN];
+	char dummy[MAXNAMELEN];
+	char wr_buf[1024];
+
 	// Check if the file is dirty
-	// if (f->f_linkno != FILE_CLEAN) {
-	// 	f->linkno = FILE_CLEAN;
-		
-
-	// }
-
+	// Ignore the link file
+	if (f->f_type != FTYPE_LNK && f->f_link_len != FILE_CLEAN && f->f_link_offset != FILE_CLEAN) {
+		// find the struct File * of the link record file
+		if ((r = walk_path(LINK_RECORD, &dir, &f1, dummy)) < 0)
+			return r;
+		// read the link file's filename
+		if ((r = file_read(f1, name, f->f_link_len, f->f_link_offset)) < 0)
+			return r;
+		// find the struct File * of the link file
+		if ((r = walk_path(name, &dir, &f2, dummy)) < 0)
+			return r;
+		// write the content
+		wr_cnt = 0;
+		while (wr_cnt < f->f_size) {
+			if ((r = file_read(f, wr_buf, 1024, wr_cnt)) < 0)
+				return r;
+			if ((r = file_write(f2, wr_buf, r, wr_cnt)) < 0)
+				return r;
+			wr_cnt += r;
+		}
+		// clear the 'dirty' bits
+		f->f_link_offset = FILE_CLEAN;
+		f->f_link_offset = FILE_CLEAN;
+	}
 	// Extend file if necessary
 	if (offset + count > f->f_size)
 		if ((r = file_set_size(f, offset + count)) < 0)
