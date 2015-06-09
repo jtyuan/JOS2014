@@ -4,6 +4,7 @@ int flag[256];
 
 void lsdir(const char*, const char*);
 void ls1(const char*, bool, off_t, const char*);
+bool is_snapshot(const char *name);
 
 void
 ls(const char *path, const char *prefix)
@@ -28,7 +29,9 @@ lsdir(const char *path, const char *prefix)
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
-		if (f.f_name[0] && f.f_name[0] != '.') // hide filename starts with '.'
+		if ((f.f_name[0] && (f.f_name[0] != '.' || flag['a']) && !is_snapshot(f.f_name)) && !flag['s']) // hide filename starts with '.'
+			ls1(prefix, f.f_type==FTYPE_DIR, f.f_size, f.f_name);
+		else if (flag['s'] && is_snapshot(f.f_name))
 			ls1(prefix, f.f_type==FTYPE_DIR, f.f_size, f.f_name);
 	if (n > 0)
 		panic("short read in directory %s", path);
@@ -55,10 +58,23 @@ ls1(const char *prefix, bool isdir, off_t size, const char *name)
 	printf("\n");
 }
 
+
+bool is_snapshot(const char *name)
+{
+	char *pos = strrchr(name, '@');
+	if (pos == NULL)
+		return false;
+	while (*(++pos)) {
+		if (!isdigit(*pos))
+			return false;
+	}
+	return true;
+}
+
 void
 usage(void)
 {
-	printf("usage: ls [-dFl] [file...]\n");
+	printf("usage: ls [-dFlas] [file...]\n");
 	exit();
 }
 
@@ -74,6 +90,8 @@ umain(int argc, char **argv)
 		case 'd':
 		case 'F':
 		case 'l':
+		case 'a':
+		case 's':
 			flag[i]++;
 			break;
 		default:

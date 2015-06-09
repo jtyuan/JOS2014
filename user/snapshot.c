@@ -60,11 +60,17 @@ ss1(const char *prefix, bool isdir, off_t size, const char *name, const char *ts
 		strcpy(dst_path, src_path);
 		strcat(dst_path, "@");
 		strcat(dst_path, ts);
-		cprintf("%s %s\n", src_path, dst_path);
-		if ((r = spawnl("/cp", "cp", "-r", src_path, dst_path, (char*)0)) < 0)
-			panic("icode: spawn /init: %e", r);
-		if (r > 0)
+		if (verbose) {
+			if ((r = spawnl("/cp", "cp", "-rv", src_path, dst_path, (char*)0)) < 0)
+				panic("icode: spawn /init: %e", r);
+		} else {
+			if ((r = spawnl("/cp", "cp", "-r", src_path, dst_path, (char*)0)) < 0)
+				panic("icode: spawn /init: %e", r);
+		}
+		if (r > 0) {
 			wait(r);
+			cprintf("Snapshot finished: %s\n", dst_path);
+		}
 	}
 }
 
