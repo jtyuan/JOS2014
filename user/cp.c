@@ -1,6 +1,7 @@
 #include <inc/lib.h>
 
 int recur;
+int verbose;
 char buf[1024];
 
 void cp1(const char *src_path, const char *dst_path, bool isdir, const char *f_name);
@@ -96,6 +97,8 @@ cp1(const char *src_path_, const char *dst_path_, bool isdir, const char *f_name
 	if (isdir) {
 		spawnl("/mkdir", "mkdir", dst_path, (char*)0);
 	} else {
+		if (verbose)
+			cprintf("Copying from %s to %s\n", src_path, dst_path);
 		if ((rfd = open(src_path, O_RDONLY)) < 0) {
 			cprintf("open %s: %e\n", src_path, rfd);
 			return;
@@ -139,7 +142,7 @@ cat_path(char *dst, const char *src)
 void
 usage(void)
 {
-	printf("usage: cp [-r] source_file dst_file\n");
+	printf("usage: cp [-rv] source_file dst_file\n");
 	exit();
 }
 
@@ -151,12 +154,16 @@ umain(int argc, char **argv)
 	struct Argstate args;
 
 	recur = 0;
+	verbose = 0;
 
 	argstart(&argc, argv, &args);
 	while ((i = argnext(&args)) >= 0)
 		switch (i) {
 		case 'r':
 			recur = 1;
+			break;
+		case 'v':
+			verbose = 1;
 			break;
 		default:
 			usage();
