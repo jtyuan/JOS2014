@@ -1,4 +1,4 @@
-// Basic string routines.  Not hardware optimized, but not shabby.
+// Basic string routines.	Not hardware optimized, but not shabby.
 
 #include <inc/string.h>
 
@@ -106,6 +106,21 @@ strchr(const char *s, char c)
 	return 0;
 }
 
+char *
+strrchr(const char *s, char c)
+{
+    char *save;
+    char ch;
+
+    for (save = (char *) 0; (ch = *s); s++) {
+		if (ch == c)
+		    save = (char *) s;
+    }
+
+    return save;
+}
+
+
 // Return a pointer to the first occurrence of 'c' in 's',
 // or a pointer to the string-ending null character if the string has no 'c'.
 char *
@@ -114,6 +129,21 @@ strfind(const char *s, char c)
 	for (; *s; s++)
 		if (*s == c)
 			break;
+	return (char *) s;
+}
+
+char *
+strrev(char *s)
+{
+	int i, j;
+	unsigned char a;
+	unsigned len = strlen(s);
+	for (i = 0, j = len - 1; i < j; i++, j--)
+	{
+		a = s[i];
+		s[i] = s[j];
+		s[j] = a;
+	}
 	return (char *) s;
 }
 
@@ -283,3 +313,70 @@ strtol(const char *s, char **endptr, int base)
 	return (neg ? -val : val);
 }
 
+char *
+itoa(int num, char *str, int base)
+{
+	int sum = num;
+	int i = 0;
+	int digit;
+	do
+	{
+		digit = sum % base;
+		if (digit < 0xA)
+			str[i++] = '0' + digit;
+		else
+			str[i++] = 'A' + digit - 0xA;
+		sum /= base;
+	}while (sum);
+	str[i] = '\0';
+	strrev(str);
+	return 0;
+}
+
+int hexval(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	else if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	else if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+		
+	return 0;
+}
+
+int
+isdigit(int c)
+{
+	return (((c)>='0')&&((c)<='9'));
+}
+
+int
+isxdigit(int c)
+{
+	return (isdigit(c) || ((c) >= 'A' && (c) <= 'F') || ((c) >= 'a' && (c) <= 'f'));
+}
+
+int
+atol(const char *num)
+{
+	long value = 0;
+	int neg = 0;
+	if (num[0] == '0' && num[1] == 'x') {
+		// hex
+		num += 2;
+		while (*num && isxdigit(*num))
+			value = value * 16 + hexval(*num++);
+	} else {
+		// decimal
+		if (num[0] == '-') {
+			neg = 1;
+			num++;
+		}
+		while (*num && isdigit(*num))
+			value = value * 10 + *num++  - '0';
+	}
+	if (neg)
+		value = -value;
+	return value;
+}

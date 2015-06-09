@@ -12,6 +12,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/kclock.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -469,6 +470,22 @@ sys_exec(uint32_t eip, uint32_t esp, void * _ph, uint32_t phnum) {
 	return 0;
 }
 
+static uint32_t
+sys_get_time(void) {
+	uint32_t year, month, day, hour, minute, second;
+	uint32_t ts = 0;
+
+	year = bcd2dec(mc146818_read(RTC_YEAR));
+	month = bcd2dec(mc146818_read(RTC_MONTH));
+	day = bcd2dec(mc146818_read(RTC_DAYOFMONTH));
+	hour = bcd2dec(mc146818_read(RTC_HOUR));
+	minute = bcd2dec(mc146818_read(RTC_MINUTE));
+	second = bcd2dec(mc146818_read(RTC_SECOND));
+
+	return ((((year * MONTH_PER_YEAR + month) * DAY_PER_MONTH + day) *
+		HOUR_PER_DAY + hour) * MIN_PER_HOUR + minute) * SEC_PER_MIN + second;
+}
+
 
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
@@ -511,6 +528,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_env_set_trapframe(a1, (struct Trapframe *) a2);
 	case SYS_exec:
 		return sys_exec(a1, a2, (void *) a3, a4);
+	case SYS_get_time:
+		return sys_get_time();
 	default:
 		return -E_INVAL;
 	}

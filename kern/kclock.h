@@ -6,10 +6,23 @@
 # error "This is a JOS kernel header; user programs should not #include it"
 #endif
 
+#define SEC_PER_MIN	60
+#define MIN_PER_HOUR 	60
+#define HOUR_PER_DAY	24
+#define DAY_PER_MONTH	31
+#define MONTH_PER_YEAR	12
+
 #define	IO_RTC		0x070		/* RTC port */
 
 #define	MC_NVRAM_START	0xe	/* start of NVRAM: offset 14 */
 #define	MC_NVRAM_SIZE	50	/* 50 bytes of NVRAM */
+
+#define RTC_SECOND	0x00	/* 00 - 59 (bcd) */
+#define RTC_MINUTE	0x02	/* 00 - 59 (bcd) */
+#define RTC_HOUR	0x04	/* 00 - 23 (bcd) */
+#define RTC_DAYOFMONTH	0x07	/* 01 - 31 (bcd) */
+#define RTC_MONTH 	0x08	/* 01 - 12 (bcd) */
+#define RTC_YEAR	0x09    /* 00 - 99 (bcd) */
 
 /* NVRAM bytes 7 & 8: base memory size */
 #define NVRAM_BASELO	(MC_NVRAM_START + 7)	/* low byte; RTC off. 0x15 */
@@ -28,5 +41,6 @@
 
 unsigned mc146818_read(unsigned reg);
 void mc146818_write(unsigned reg, unsigned datum);
+unsigned bcd2dec(unsigned datum);
 
 #endif	// !JOS_KERN_KCLOCK_H

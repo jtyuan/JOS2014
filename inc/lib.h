@@ -58,6 +58,7 @@ int	sys_page_unmap(envid_t env, void *pg);
 int	sys_ipc_try_send(envid_t to_env, uint32_t value, void *pg, int perm);
 int	sys_ipc_recv(void *rcv_pg);
 int 	sys_exec(uint32_t eip, uint32_t esp, void * ph, uint32_t phnum);
+uint32_t sys_get_time(void);
 
 // This must be inlined.  Exercise for reader: why?
 static __inline envid_t __attribute__((always_inline))

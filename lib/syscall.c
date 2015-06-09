@@ -122,3 +122,9 @@ sys_exec(uint32_t eip, uint32_t esp, void * ph, uint32_t phnum)
 {
 	return syscall(SYS_exec, 0, eip, esp, (uint32_t) ph, phnum, 0);
 }
+
+uint32_t
+sys_get_time(void)
+{
+	return syscall(SYS_get_time, 0, 0, 0, 0, 0, 0);
+}

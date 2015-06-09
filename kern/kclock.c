@@ -20,3 +20,9 @@ mc146818_write(unsigned reg, unsigned datum)
 	outb(IO_RTC, reg);
 	outb(IO_RTC+1, datum);
 }
+
+unsigned
+bcd2dec(unsigned datum)
+{
+	return (datum & 0x0F) + 10*((datum >> 4) & 0x0F);
+}

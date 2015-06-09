@@ -32,6 +32,7 @@ USERAPPS :=		$(USERAPPS) \
 			$(OBJDIR)/user/touch \
 			$(OBJDIR)/user/hello \
 			$(OBJDIR)/user/history \
+			$(OBJDIR)/user/systime \
 			$(OBJDIR)/user/mkdir \
 			$(OBJDIR)/user/link \
 			$(OBJDIR)/user/cp \
