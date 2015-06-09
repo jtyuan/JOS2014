@@ -26,7 +26,7 @@
 
 #define MAXFILESIZE	((NDIRECT + NINDIRECT) * BLKSIZE)
 
-#define FILE_CLEAN	(~0)
+#define FILE_CLEAN	0
 
 #define LINK_RECORD 	"/.link_record"
 
@@ -123,8 +123,8 @@ union Fsipc {
 		size_t req_len;
 	} snap;
 	struct Fsret_snap {
-		int ret_offset;
-		int ret_len;
+		size_t ret_offset;
+		size_t ret_len;
 	} snapRet;
 	struct Fsreq_stat {
 		int req_fileid;

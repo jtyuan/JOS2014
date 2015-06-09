@@ -95,7 +95,10 @@ cp1(const char *src_path_, const char *dst_path_, bool isdir, const char *f_name
 	}
 
 	if (isdir) {
-		spawnl("/mkdir", "mkdir", dst_path, (char*)0);
+		if ((r = spawnl("/mkdir", "mkdir", dst_path, (char*)0)) < 0)
+			return;
+		if (r >= 0)
+			wait(r);
 	} else {
 		if (verbose)
 			cprintf("Copying from %s to %s\n", src_path, dst_path);

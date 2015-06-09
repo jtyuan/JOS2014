@@ -93,6 +93,7 @@ ssize_t	readn(int fd, void *buf, size_t nbytes);
 int	dup(int oldfd, int newfd);
 int	fstat(int fd, struct Stat *statbuf);
 int	stat(const char *path, struct Stat *statbuf);
+int 	snap(int fdnum, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 
 // file.c
 int	open(const char *path, int mode);

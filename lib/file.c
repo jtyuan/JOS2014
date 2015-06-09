@@ -39,6 +39,7 @@ static ssize_t devfile_read(struct Fd *fd, void *buf, size_t n);
 static ssize_t devfile_write(struct Fd *fd, const void *buf, size_t n);
 static int devfile_stat(struct Fd *fd, struct Stat *stat);
 static int devfile_trunc(struct Fd *fd, off_t newsize);
+static int devfile_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 
 struct Dev devfile =
 {

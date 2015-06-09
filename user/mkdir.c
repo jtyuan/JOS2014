@@ -3,12 +3,23 @@
 void
 umain(int argc, char **argv)
 {
-	int fd, fd2;
+	int fd;
+	
+	binaryname = "mkdir";
+
+	if (argc < 2) {
+		cprintf("usage: mkdir path/to/dir\n");
+		return;
+	}
+
+	// cprintf("%d %s\n", argc, argv[1]);
 
 	if ((fd = open(argv[1], O_MKDIR)) < 0)
 		panic("open %s: %e", argv[1], fd);
 
 	close(fd);
+
+	// cprintf("done\n");
 
 
 	// char path[256];

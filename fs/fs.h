@@ -37,6 +37,7 @@ int 	file_mklink(const char *path, struct File **f);
 int	file_open(const char *path, struct File **f);
 ssize_t	file_read(struct File *f, void *buf, size_t count, off_t offset);
 int	file_write(struct File *f, const void *buf, size_t count, off_t offset);
+int 	file_snap(struct File *f, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 int	file_set_size(struct File *f, off_t newsize);
 void	file_flush(struct File *f);
 int	file_remove(const char *path);
@@ -45,6 +46,9 @@ void	fs_sync(void);
 /* int	map_block(uint32_t); */
 bool	block_is_free(uint32_t blockno);
 int	alloc_block(void);
+
+
+int 	write_back(struct File *f);
 
 /* test.c */
 void	fs_test(void);

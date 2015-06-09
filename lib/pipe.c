@@ -6,6 +6,7 @@ static ssize_t devpipe_read(struct Fd *fd, void *buf, size_t n);
 static ssize_t devpipe_write(struct Fd *fd, const void *buf, size_t n);
 static int devpipe_stat(struct Fd *fd, struct Stat *stat);
 static int devpipe_close(struct Fd *fd);
+static int devpipe_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 
 struct Dev devpipe =
 {

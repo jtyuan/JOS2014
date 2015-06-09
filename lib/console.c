@@ -38,6 +38,7 @@ static ssize_t devcons_read(struct Fd*, void*, size_t);
 static ssize_t devcons_write(struct Fd*, const void*, size_t);
 static int devcons_close(struct Fd*);
 static int devcons_stat(struct Fd*, struct Stat*);
+static int devcons_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 
 struct Dev devcons =
 {
