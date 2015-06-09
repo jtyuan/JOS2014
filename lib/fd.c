@@ -223,7 +223,7 @@ ssize_t
 readn(int fdnum, void *buf, size_t n)
 {
 	int m, tot;
-	
+
 	for (tot = 0; tot < n; tot += m) {
 		m = read(fdnum, (char*)buf + tot, n - tot);
 		if (m < 0)
@@ -317,4 +317,23 @@ stat(const char *path, struct Stat *stat)
 	r = fstat(fd, stat);
 	close(fd);
 	return r;
+}
+
+int
+snap(int fdnum, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
+{
+	int r;
+	struct Dev *dev;
+	struct Fd *fd;
+
+	if ((r = fd_lookup(fdnum, &fd)) < 0
+	    || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0)
+		return r;
+	if ((fd->fd_omode & O_ACCMODE) == O_WRONLY) {
+		cprintf("[%08x] read %d -- bad mode\n", thisenv->env_id, fdnum);
+		return -E_INVAL;
+	}
+	if (!dev->dev_snap)
+		return -E_NOT_SUPP;
+	return (*dev->dev_snap)(fd, offset, len, old_offset, old_len);
 }

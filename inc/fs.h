@@ -90,7 +90,8 @@ enum {
 	FSREQ_STAT,
 	FSREQ_FLUSH,
 	FSREQ_REMOVE,
-	FSREQ_SYNC
+	FSREQ_SYNC,
+	FSREQ_SNAP
 };
 
 union Fsipc {
@@ -114,6 +115,15 @@ union Fsipc {
 		size_t req_n;
 		char req_buf[PGSIZE - (sizeof(int) + sizeof(size_t))];
 	} write;
+	struct Fsreq_snap {
+		int req_fileid;
+		size_t req_offset;
+		size_t req_len;
+	} snap;
+	struct Fsret_snap {
+		int ret_offset;
+		int ret_len;
+	} snapRet;
 	struct Fsreq_stat {
 		int req_fileid;
 	} stat;

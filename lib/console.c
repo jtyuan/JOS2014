@@ -46,7 +46,8 @@ struct Dev devcons =
 	.dev_read =	devcons_read,
 	.dev_write =	devcons_write,
 	.dev_close =	devcons_close,
-	.dev_stat =	devcons_stat
+	.dev_stat =	devcons_stat,
+	.dev_snap = devcons_snap
 };
 
 int
@@ -126,3 +127,10 @@ devcons_stat(struct Fd *fd, struct Stat *stat)
 	return 0;
 }
 
+
+static int
+devcons_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
+{
+	cprintf("This shouldn't be happening...\n");
+	return 0;
+}

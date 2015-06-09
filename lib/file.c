@@ -48,7 +48,8 @@ struct Dev devfile =
 	.dev_close =	devfile_flush,
 	.dev_stat =	devfile_stat,
 	.dev_write =	devfile_write,
-	.dev_trunc =	devfile_trunc
+	.dev_trunc =	devfile_trunc,
+	.dev_snap = devfile_snap
 };
 
 // Open a file (or directory).
@@ -220,3 +221,21 @@ sync(void)
 	return fsipc(FSREQ_SYNC, NULL);
 }
 
+
+static int
+devfile_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
+{
+	int r;
+
+	fsipcbuf.snap.req_fileid = fd->fd_file.id;
+	fsipcbuf.snap.req_offset = offset;
+	fsipcbuf.snap.req_len = len;
+
+	if ((r = fsipc(FSREQ_SNAP, NULL)) < 0)
+		return r;
+
+	*old_offset = fsipcbuf.snapRet.ret_offset;
+	*old_len = fsipcbuf.snapRet.ret_len;
+
+	return r;
+}

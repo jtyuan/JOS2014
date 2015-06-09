@@ -15,6 +15,7 @@ struct Dev devpipe =
 	.dev_write =	devpipe_write,
 	.dev_close =	devpipe_close,
 	.dev_stat =	devpipe_stat,
+	.dev_snap = devpipe_snap
 };
 
 #define PIPEBUFSIZ 32		// small to provoke races
@@ -190,3 +191,12 @@ devpipe_close(struct Fd *fd)
 	return sys_page_unmap(0, fd2data(fd));
 }
 
+
+
+
+static int
+devpipe_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
+{
+	cprintf("This shouldn't be happening...\n");
+	return 0;
+}

@@ -30,6 +30,8 @@ ssdir(const char *path, const char *ts)
 	struct File f;
 	char buf[256];
 
+	// cprintf("%s\n", path);
+
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
@@ -50,27 +52,69 @@ ssdir(const char *path, const char *ts)
 void
 ss1(const char *prefix, bool isdir, off_t size, const char *name, const char *ts)
 {
-	int r;
+	int r, rfd, wfd, lfd;
+	size_t offset, len;
+	size_t old_offset, old_len;
+	struct Stat st;
 	char src_path[256] = "\0";
-	char dst_path[256];
+	char dst_path[256], old_path[256];
 	if (prefix)
 		strcpy(src_path, prefix);
 	cat_path(src_path, name);
+
+	strcpy(dst_path, src_path);
+	strcat(dst_path, "@");
+	strcat(dst_path, ts);
+
 	if (flag == 'n') {
-		strcpy(dst_path, src_path);
-		strcat(dst_path, "@");
-		strcat(dst_path, ts);
 		if (verbose) {
 			if ((r = spawnl("/cp", "cp", "-rv", src_path, dst_path, (char*)0)) < 0)
-				panic("icode: spawn /init: %e", r);
+				panic("snapshot: spawn /cp: %e", r);
 		} else {
 			if ((r = spawnl("/cp", "cp", "-r", src_path, dst_path, (char*)0)) < 0)
-				panic("icode: spawn /init: %e", r);
+				panic("snapshot: spawn /cp: %e", r);
 		}
 		if (r > 0) {
 			wait(r);
 			cprintf("Snapshot finished: %s\n", dst_path);
 		}
+		return;
+	}
+
+	if (verbose)
+		cprintf("%s\n", src_path);
+
+	if (flag == 'c') {
+		if ((rfd = open(src_path, O_RDONLY)) < 0) {
+			cprintf("snapshot: open %s: %e\n", src_path, rfd);
+			return;
+		}
+		if ((lfd = open(LINK_RECORD, O_RDWR)) < 0) {
+			cprintf("snapshot: open %s: %e\n", LINK_RECORD, lfd);
+			return;
+		}
+		if ((r = fstat(lfd, &st)) < 0)
+			panic("stat %s: %e", LINK_RECORD, r);
+
+		seek(lfd, st.st_size);
+
+		offset = st.st_size;
+		len = strlen(dst_path);
+
+		if ((r = write(lfd, dst_path, len)) != len)
+			panic("write %s: %e", LINK_RECORD, r);
+		
+		snap(rfd, offset, len, &old_offset, &old_len);
+
+		if (old_offset != LINK_CLEAN && old_len != LINK_CLEAN) {
+			seek(lfd, old_offset);
+			read(lfd, old_path, old_len);
+			if ((r = spawnl("/link", "link", dst_path, old_path, (char*)0)) < 0)
+				panic("snapshot: spawn /link: %e", r);
+		}
+
+		close(rfd);
+		closr(lfd);
 	}
 }
 

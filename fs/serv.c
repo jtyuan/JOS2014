@@ -324,6 +324,29 @@ serve_sync(envid_t envid, union Fsipc *req)
 	return 0;
 }
 
+int
+serve_snap(envid_t envid, union Fsipc *ipc)
+{
+	struct Fsreq_read *req = &ipc->snap;
+	struct Fsret_read *ret = &ipc->snapRet;
+	struct OpenFile *o;
+	struct File *f;
+	int r;
+
+	if (debug)
+		cprintf("serve_snap %08x %08d %08d %s\n", envid, req->req_srcid, req->req_offset, req->req_len);
+
+	if ((r = openfile_lookup(envid, req->req_fileid, &o)) < 0)
+		return r;
+
+	f = o->o_file;
+
+	if ((r = file_snap(o->o_file, req->req_offset, req->req_len, &ret->ret_offset, &ret->ret_len)) < 0)
+		return r;
+
+	return 0;
+}
+
 typedef int (*fshandler)(envid_t envid, union Fsipc *req);
 
 fshandler handlers[] = {
@@ -334,7 +357,8 @@ fshandler handlers[] = {
 	[FSREQ_FLUSH] =		(fshandler)serve_flush,
 	[FSREQ_WRITE] =		(fshandler)serve_write,
 	[FSREQ_SET_SIZE] =	(fshandler)serve_set_size,
-	[FSREQ_SYNC] =		serve_sync
+	[FSREQ_SYNC] =		serve_sync,
+	[FSREQ_SNAP] = 		serve_snap
 };
 #define NHANDLERS (sizeof(handlers)/sizeof(handlers[0]))
 

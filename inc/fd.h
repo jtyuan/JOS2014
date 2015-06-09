@@ -21,6 +21,7 @@ struct Dev {
 	int (*dev_close)(struct Fd *fd);
 	int (*dev_stat)(struct Fd *fd, struct Stat *stat);
 	int (*dev_trunc)(struct Fd *fd, off_t length);
+	int (*dev_snap)(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len);
 };
 
 struct FdFile {

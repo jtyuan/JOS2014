@@ -466,6 +466,16 @@ file_write(struct File *f, const void *buf, size_t count, off_t offset)
 	return count;
 }
 
+int
+file_snap(struct File *f, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
+{
+	*old_offset = f->f_link_offset;
+	*old_len = f->f_link_len;
+	f->f_link_offset = offset;
+	f->f_link_len = len;
+	return 0;
+}
+
 // Remove a block from file f.  If it's not there, just silently succeed.
 // Returns 0 on success, < 0 on error.
 static int
