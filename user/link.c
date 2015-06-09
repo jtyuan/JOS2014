@@ -3,8 +3,10 @@
 void link(const char *src_path, const char *dst_path)
 {
 	int wfd, n;
-	if ((wfd = open(dst_path, O_WRONLY | O_EXCL | O_LINK)) < 0)
+	if ((wfd = open(dst_path, O_WRONLY | O_EXCL | O_LINK)) < 0) { 
 		cprintf("open %s: %e\n", dst_path, wfd);
+		return;
+	}
 	
 	write(wfd, src_path, strlen(src_path));
 	
