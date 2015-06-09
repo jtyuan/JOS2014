@@ -41,6 +41,7 @@ struct Stat {
 	char st_name[MAXNAMELEN];
 	off_t st_size;
 	int st_isdir;
+	int st_islink;
 	struct Dev *st_dev;
 };
 

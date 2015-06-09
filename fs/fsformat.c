@@ -221,7 +221,6 @@ main(int argc, char **argv)
 	int i;
 	char *s;
 	struct Dir root;
-
 	assert(BLKSIZE % sizeof(struct File) == 0);
 
 	if (argc < 3)

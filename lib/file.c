@@ -68,8 +68,10 @@ open(const char *path, int mode)
 	// If any step after fd_alloc fails, use fd_close to free the
 	// file descriptor.
 
-	int r;
+	int r, fdnum;
 	struct Fd *fd;
+	struct Stat st;
+	char tmp_path[256];
 
 	if (strlen(path) >= MAXPATHLEN)
 		return -E_BAD_PATH;
@@ -85,7 +87,16 @@ open(const char *path, int mode)
 		return r;
 	}
 
-	return fd2num(fd);
+	fdnum = fd2num(fd);
+
+	if ((r = fstat(fdnum, &st)) < 0)
+		panic("stat %s: %e", path, r);
+	if (st.st_islink && !(mode & O_LINK)) {
+		read(fdnum, tmp_path, st.st_size);
+		return open(tmp_path, mode);
+	}
+
+	return fdnum;
 }
 
 // Flush the file descriptor.  After this the fileid is invalid.
@@ -155,13 +166,13 @@ static int
 devfile_stat(struct Fd *fd, struct Stat *st)
 {
 	int r;
-
 	fsipcbuf.stat.req_fileid = fd->fd_file.id;
 	if ((r = fsipc(FSREQ_STAT, NULL)) < 0)
 		return r;
 	strcpy(st->st_name, fsipcbuf.statRet.ret_name);
 	st->st_size = fsipcbuf.statRet.ret_size;
 	st->st_isdir = fsipcbuf.statRet.ret_isdir;
+	st->st_islink = fsipcbuf.statRet.ret_islink;
 	return 0;
 }
 

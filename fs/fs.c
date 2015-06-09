@@ -351,6 +351,50 @@ file_create(const char *path, struct File **pf)
 	return 0;
 }
 
+int
+file_mkdir(const char *path, struct File **pdir)
+{
+	char name[MAXNAMELEN];
+	int r;
+	struct File *dir, *f;
+
+	if ((r = walk_path(path, &dir, &f, name)) == 0)
+		return -E_FILE_EXISTS;
+	if (r != -E_NOT_FOUND || dir == 0)
+		return r;
+	if ((r = dir_alloc_file(dir, &f)) < 0)
+		return r;
+
+	f->f_type = FTYPE_DIR;
+
+	strcpy(f->f_name, name);
+	*pdir = f;
+	file_flush(dir);
+	return 0;
+}
+
+int
+file_mklink(const char *path, struct File **pdir)
+{
+	char name[MAXNAMELEN];
+	int r;
+	struct File *dir, *f;
+
+	if ((r = walk_path(path, &dir, &f, name)) == 0)
+		return -E_FILE_EXISTS;
+	if (r != -E_NOT_FOUND || dir == 0)
+		return r;
+	if ((r = dir_alloc_file(dir, &f)) < 0)
+		return r;
+	
+	f->f_type = FTYPE_LNK;
+
+	strcpy(f->f_name, name);
+	*pdir = f;
+	file_flush(dir);
+	return 0;
+}
+
 // Open "path".  On success set *pf to point at the file and return 0.
 // On error return < 0.
 int

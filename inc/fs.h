@@ -26,6 +26,21 @@
 
 #define MAXFILESIZE	((NDIRECT + NINDIRECT) * BLKSIZE)
 
+// struct File {
+// 	char f_name[MAXNAMELEN];	// filename
+// 	off_t f_size;			// file size in bytes
+// 	uint32_t f_type;		// file type
+
+// 	// Block pointers.
+// 	// A block is allocated iff its value is != 0.
+// 	uint32_t f_direct[NDIRECT];	// direct blocks
+// 	uint32_t f_indirect;		// indirect block
+
+// 	// Pad out to 256 bytes; must do arithmetic in case we're compiling
+// 	// fsformat on a 64-bit machine.
+// 	uint8_t f_pad[256 - MAXNAMELEN - 8 - 4*NDIRECT - 4];
+// } __attribute__((packed));	// required only on some 64-bit machines
+
 struct File {
 	char f_name[MAXNAMELEN];	// filename
 	off_t f_size;			// file size in bytes
@@ -41,12 +56,14 @@ struct File {
 	uint8_t f_pad[256 - MAXNAMELEN - 8 - 4*NDIRECT - 4];
 } __attribute__((packed));	// required only on some 64-bit machines
 
+
 // An inode block contains exactly BLKFILES 'struct File's
 #define BLKFILES	(BLKSIZE / sizeof(struct File))
 
 // File types
 #define FTYPE_REG	0	// Regular file
 #define FTYPE_DIR	1	// Directory
+#define FTYPE_LNK	2   // Link file
 
 
 // File system super-block (both in-memory and on-disk)
@@ -101,6 +118,7 @@ union Fsipc {
 		char ret_name[MAXNAMELEN];
 		off_t ret_size;
 		int ret_isdir;
+		int ret_islink;
 	} statRet;
 	struct Fsreq_flush {
 		int req_fileid;

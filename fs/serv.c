@@ -124,6 +124,27 @@ serve_open(envid_t envid, struct Fsreq_open *req,
 	}
 	fileid = r;
 
+
+	if (req->req_omode & O_LINK) {
+		if ((r = file_mklink(path, &f)) < 0) {
+			if (!(req->req_omode & O_EXCL) && r == -E_FILE_EXISTS)
+				goto try_open;
+			if (debug)
+				cprintf("file_create failed: %e", r);
+			return r;	
+		}
+
+	} else
+	if (req->req_omode & O_MKDIR) {
+		if ((r = file_mkdir(path, &f)) < 0) {
+			if (!(req->req_omode & O_EXCL) && r == -E_FILE_EXISTS)
+				goto try_open;
+			if (debug)
+				cprintf("file_create failed: %e", r);
+			return r;	
+		}
+
+	} else
 	// Open the file
 	if (req->req_omode & O_CREAT) {
 		if ((r = file_create(path, &f)) < 0) {
@@ -275,6 +296,7 @@ serve_stat(envid_t envid, union Fsipc *ipc)
 	strcpy(ret->ret_name, o->o_file->f_name);
 	ret->ret_size = o->o_file->f_size;
 	ret->ret_isdir = (o->o_file->f_type == FTYPE_DIR);
+	ret->ret_islink = (o->o_file->f_type == FTYPE_LNK);
 	return 0;
 }
 
