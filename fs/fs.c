@@ -441,6 +441,13 @@ file_write(struct File *f, const void *buf, size_t count, off_t offset)
 	int r, bn;
 	off_t pos;
 	char *blk;
+	char link_path[512];
+	// Check if the file is dirty
+	// if (f->f_linkno != FILE_CLEAN) {
+	// 	f->linkno = FILE_CLEAN;
+		
+
+	// }
 
 	// Extend file if necessary
 	if (offset + count > f->f_size)
