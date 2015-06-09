@@ -4,6 +4,9 @@
 
 #define debug 0
 
+
+char tmp_path[256];
+
 union Fsipc fsipcbuf __attribute__((aligned(PGSIZE)));
 
 // Send an inter-environment request to the file server, and wait for
@@ -18,14 +21,17 @@ fsipc(unsigned type, void *dstva)
 	static envid_t fsenv;
 	if (fsenv == 0)
 		fsenv = ipc_find_env(ENV_TYPE_FS);
-
+	
 	static_assert(sizeof(fsipcbuf) == PGSIZE);
-
+	
 	if (debug)
 		cprintf("[%08x] fsipc %d %08x\n", thisenv->env_id, type, *(uint32_t *)&fsipcbuf);
-
+	
 	ipc_send(fsenv, type, &fsipcbuf, PTE_P | PTE_W | PTE_U);
-	return ipc_recv(NULL, dstva, NULL);
+	
+	int a = ipc_recv(NULL, dstva, NULL);
+
+	return a;
 }
 
 static int devfile_flush(struct Fd *fd);
@@ -71,31 +77,32 @@ open(const char *path, int mode)
 	int r, fdnum;
 	struct Fd *fd;
 	struct Stat st;
-	char tmp_path[256];
-
+	
 	if (strlen(path) >= MAXPATHLEN)
 		return -E_BAD_PATH;
-
+	
 	if ((r = fd_alloc(&fd)) < 0)
 		return r;
-
+	
 	strcpy(fsipcbuf.open.req_path, path);
+	
 	fsipcbuf.open.req_omode = mode;
-
+	
 	if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
 		fd_close(fd, 0);
 		return r;
 	}
-
+	
 	fdnum = fd2num(fd);
-
+	
 	if ((r = fstat(fdnum, &st)) < 0)
 		panic("stat %s: %e", path, r);
+	
 	if (st.st_islink && !(mode & O_LINK)) {
 		read(fdnum, tmp_path, st.st_size);
 		return open(tmp_path, mode);
 	}
-
+	
 	return fdnum;
 }
 

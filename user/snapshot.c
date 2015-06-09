@@ -6,6 +6,7 @@ int recur;
 void ssdir(const char*, const char*);
 void ss1(const char*, bool, off_t, const char*, const char*);
 bool is_snapshot(const char*);
+void cat_path(char *dst, const char *src);
 
 void
 snapshot(const char *path, const char *ts)
@@ -15,7 +16,7 @@ snapshot(const char *path, const char *ts)
 
 	if ((r = stat(path, &st)) < 0)
 		panic("stat %s: %e", path, r);
-	if (st.st_isdir)
+	if (st.st_isdir && flag != 'n')
 		ssdir(path, ts);
 	else
 		ss1(0, st.st_isdir, st.st_size, path, ts);
@@ -24,18 +25,18 @@ snapshot(const char *path, const char *ts)
 void
 ssdir(const char *path, const char *ts)
 {
-	int fd, n;
+	int fd, n, r;
 	struct File f;
 	char buf[256];
 
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
-		if (f.f_name[0] && !is_snapshot(f.f_name[0])) {
-			ss1(path, f.f_type==FTYPE_DIR, f.f_size, f.f_name);
+		if (f.f_name[0] && !is_snapshot(f.f_name)) {
+			ss1(path, f.f_type==FTYPE_DIR, f.f_size, f.f_name, ts);
 			if (recur && f.f_type == FTYPE_DIR) {
 				strcpy(buf, path);
-				strcat(buf, f.f_name);
+				cat_path(buf, f.f_name);
 				ssdir(buf, ts);
 			}
 		}
@@ -46,9 +47,30 @@ ssdir(const char *path, const char *ts)
 }
 
 void
-ss1(const char *prefix, bool isdir, off_t size, const char *name)
+ss1(const char *prefix, bool isdir, off_t size, const char *name, const char *ts)
 {
-	
+	int r;
+	char src_path[256] = "\0";
+	char dst_path[256];
+	if (prefix)
+		strcpy(src_path, prefix);
+	cat_path(src_path, name);
+	if (flag == 'n') {
+		strcpy(dst_path, src_path);
+		strcat(dst_path, "@");
+		strcat(dst_path, ts);
+		cprintf("%s %s\n", src_path, dst_path);
+		if ((r = spawnl("/cp", "-r", src_path, dst_path, (char*)0)) < 0)
+			panic("icode: spawn /init: %e", r);
+	}
+}
+
+void
+cat_path(char *dst, const char *src)
+{
+	if (dst[strlen(dst)-1] != '/')
+		strcat(dst, "/");
+	strcat(dst, src);
 }
 
 bool is_snapshot(const char *name)
@@ -67,6 +89,7 @@ bool is_snapshot(const char *name)
 void
 usage(void)
 {
+	// naïve/cow/incremental
 	printf("usage: snapshot [-(n|c|i)r] [file...]\n");
 	exit();
 }
@@ -80,7 +103,7 @@ umain(int argc, char **argv)
 
 	itoa(sys_get_time(), ts, 10);
 
-	flag = 'i';
+	flag = 'n';
 	recur = 0;
 
 	argstart(&argc, argv, &args);
