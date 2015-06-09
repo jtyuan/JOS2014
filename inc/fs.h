@@ -28,6 +28,8 @@
 
 #define FILE_CLEAN	(~0)
 
+#define LINK_RECORD 	"/.link_record"
+
 // struct File {
 // 	char f_name[MAXNAMELEN];	// filename
 // 	off_t f_size;			// file size in bytes
