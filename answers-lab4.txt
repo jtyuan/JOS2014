@@ -1,0 +1,293 @@
+#### Question 1
+
+>Compare `kern/mpentry.S` side by side with `boot/boot.S`. Bearing in mind that `kern/mpentry.S` is compiled and linked to run above `KERNBASE` just like everything else in the kernel, what is the purpose of macro `MPBOOTPHYS`? Why is it necessary in `kern/mpentry.S` but not in `boot/boot.S`? In other words, what could go wrong if it were omitted in `kern/mpentry.S`? 
+Hint: recall the differences between the link address and the load address that we have discussed in Lab 1.
+
+`mpentry.S`的代码运行在物理内存中`MPENTRY_PADDR(0x7000)`开始的位置，而宏`MPBOOTPHYS`则是将给定的链接地址转化成对应的物理地址。如果不使用这个宏则无法正确的找到物理地址。
+
+#### Question 2
+
+>It seems that using the big kernel lock guarantees that only one CPU can run the kernel code at a time. Why do we still need separate kernel stacks for each CPU? Describe a scenario in which using a shared kernel stack will go wrong, even with the protection of the big kernel lock.
+
+如果多个CPU共享一个栈，CPU之间使用栈(push、pop)的顺序是不一定的，可能出现一个CPU push的内容被另一个CPU pop出来的情况。
+
+#### Question 3
+
+>In your implementation of `env_run()` you should have called `lcr3()`. Before and after the call to `lcr3()`, your code makes references (at least it should) to the variable `e`, the argument to `env_run`. Upon loading the `%cr3` register, the addressing context used by the `MMU` is instantly changed. But a virtual address (namely `e`) has meaning relative to a given address context--the address context specifies the physical address to which the virtual address maps. Why can the pointer `e` be dereferenced both before and after the addressing switch?
+
+因为用户环境的页表初始化时是通过`memcpy(e->env_pgdir, kern_pgdir, PGSIZE);`语句直接从内核页表复制过来的，所以转换前后`e`所对应的虚拟地址也是一致的。
+
+#### Question 4
+
+>Whenever the kernel switches from one environment to another, it must ensure the old environment's registers are saved so they can be restored properly later. Why? Where does this happen?
+
+因为不保存下来就无法正确地恢复到原来的环境。
+
+发生在`trap.c`的`trap`函数中：`curenv->env_tf = *tf;`
+
+
+#### Challenge 2
+
+>Add a less trivial scheduling policy to the kernel, such as a fixed-priority scheduler that allows each environment to be assigned a priority and ensures that higher-priority environments are always chosen in preference to lower-priority environments. If you're feeling really adventurous, try implementing a Unix-style adjustable-priority scheduler or even a lottery or stride scheduler. (Look up "lottery scheduling" and "stride scheduling" in Google.)
+
+>Write a test program or two that verifies that your scheduling algorithm is working correctly (i.e., the right environments get run in the right order). It may be easier to write these test programs once you have implemented fork() and IPC in parts B and C of this lab.
+
+参考了[陈诗安师兄的静态优先级的调度策略](https://github.com/Clann24/jos/tree/master/lab4)，实现了一个简单的动态优先级的scheduling policy，在一个进程yield的时候会选择envs数组中优先级高于当前进程的第一个进程执行；每一个当前过程没能执行的进程优先级会`+1`。当一个进程被执行时优先级恢复成进程创建时的初始值。
+
+```java
+void
+sched_yield(void)
+{
+	struct Env *idle;
+	int i, k, envidx;
+
+	if (curenv)
+		envidx = ENVX(curenv->env_id);
+	else
+		envidx = 0;
+
+	for (i = 0; i < NENV; ++i) {
+		k = (envidx + i) % NENV;
+		if (envs[k].env_status == ENV_RUNNABLE) {
+			if (curenv == NULL || envs[k].env_cur_pr > curenv->env_cur_pr) {
+				cprintf("env[%d] is taking over with priority %d\n", k, envs[k].env_cur_pr);
+				envs[k].env_cur_pr = envs[k].env_def_pr;
+				env_run(&envs[k]);
+			} else {
+				envs[k].env_cur_pr++;
+			}
+		}
+	}
+	if (curenv && curenv->env_status == ENV_RUNNING)
+		env_run(curenv);
+
+	// sched_halt never returns
+	sched_halt();
+}
+```
+
+优先级需要在进程创建时设置，因此为此设计了一个`pfork`来专门设置进程优先级（若使用`fork`来创建进程，则默认优先级为0）
+
+```
+envid_t
+pfork(int priority)
+{
+	int r;
+	envid_t envid;
+	uintptr_t addr;
+
+	set_pgfault_handler(pgfault);
+
+	if ((envid = sys_exofork()) == 0) {
+		// child
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	for (addr = 0; addr < USTACKTOP; addr += PGSIZE) {
+		if ((uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P)
+			&& (uvpt[PGNUM(addr)] & PTE_U))
+			duppage(envid, PGNUM(addr));
+	}
+
+	if ((r = sys_page_alloc(envid, (void *) (UXSTACKTOP - PGSIZE), 
+		PTE_P | PTE_U | PTE_W)) < 0)
+		panic("fork: %e", r);
+
+	extern void _pgfault_upcall();
+	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+		panic("fork: %e", r);
+
+	if ((r = sys_env_set_priority(envid, priority)) < 0)
+		panic("fork: %e", r);
+
+	return envid;
+	panic("fork not implemented");
+}
+
+```
+
+其中使用了新定义的系统调用`sys_env_set_priority`（需要在`inc/lib.c`，`lib/syscall.c`，`kern/syscall.c`中添加相应的代码）：
+
+```java
+// inc/lib.c
+envid_t pfork(int priority);
+
+// lib/syscall.c
+int
+sys_env_set_priority(envid_t envid, int priority)
+{
+	return syscall(SYS_env_set_priority, 0, envid, priority, 0, 0, 0);
+}
+
+// kern/syscall.c
+static int
+sys_env_set_priority(envid_t envid, int priority) {
+	int r;
+	struct Env *env;
+	if ((r = envid2env(envid, &env, 1)) < 0)
+		return -E_BAD_ENV;
+	env->env_def_pr = priority;
+	env->env_cur_pr = env->env_def_pr;
+	return 0;
+}
+
+int32_t
+syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+	...
+	case SYS_env_set_priority:
+		return sys_env_set_priority(a1, a2);
+	...
+}
+```
+
+测试代码：
+
+```java
+// user/pfork.c
+
+#include <inc/lib.h>
+
+void
+umain(int argc, char **argv)
+{
+    int i;
+    for (i = 0; i < 16; ++i) {
+        int who;
+        if ((who = pfork(i)) == 0) {
+            cprintf("env[%d] is running with cur_pr=%d!\n", i, i);
+            int j;
+            for (j = 0; j < 16; ++j) {
+                cprintf("env[%d] yields!\n", i);
+                sys_yield();
+            }
+            break;
+        }
+    }
+}
+```
+
+为了能够`make run-pfork`执行这个程序，需要在`kern/Makefrag`中添加
+
+```
+# Self defined files for challenges
+KERN_BINFILES +=	user/pfork
+```
+
+执行结果：
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1es2yerk5y6j20rw14e7hs.jpg =600x)
+
+
+#### Challenge 6
+
+>Implement a shared-memory `fork()` called `sfork()`. This version should have the parent and child share all their memory pages (so writes in one environment appear in the other) except for pages in the stack area, which should be treated in the usual copy-on-write manner. Modify user/forktree.c to use `sfork()` instead of regular `fork()`. Also, once you have finished implementing IPC in part C, use your `sfork()` to run `user/pingpongs`. You will have to find a new way to provide the functionality of the global thisenv pointer.
+
+这个Challenge实现的关键就是把parent和child内存空间相互共享。先将parent的内存拷贝到child中（栈使用COW，异常栈相互独立），然后将其他部分直接将parent的页映射到child即可：
+
+```java
+// Challenge!
+int
+sfork(void)
+{
+	envid_t envid, thisenvid = sys_getenvid();
+	int perm;
+	int r;
+	uint32_t i, j, pn;
+
+	set_pgfault_handler(pgfault);
+
+	if ((envid = sys_exofork()) == 0) {
+		// child
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	for (i = PDX(UXSTACKTOP-PGSIZE); i >= PDX(UTEXT) ; i--) {
+		if (uvpd[i] & PTE_P) {
+			for (j = 0; j < NPTENTRIES; j++) {
+				pn = PGNUM(PGADDR(i, j, 0));
+				if (pn == PGNUM(UXSTACKTOP-PGSIZE))
+					break;
+
+				if (pn == PGNUM(USTACKTOP-PGSIZE))
+					 duppage(envid, pn);
+				else if (uvpt[pn] & PTE_P) {   
+					perm = uvpt[pn] & ~(uvpt[pn] & ~(PTE_P |PTE_U | PTE_W | PTE_AVAIL));
+					
+					if ((r = sys_page_map(thisenvid, (void *)(PGADDR(i, j, 0)), 
+							envid, (void *)(PGADDR(i, j, 0)), perm)) < 0)
+						return r;
+				}
+			}
+		}
+	}
+
+	if ((r = sys_page_alloc(envid, (void *)(UXSTACKTOP - PGSIZE), PTE_U | PTE_P | PTE_W)) < 0)
+		return r;
+
+	if ((r = sys_page_map(envid, (void *)(UXSTACKTOP - PGSIZE), 
+		thisenvid, PFTEMP, PTE_U | PTE_P | PTE_W)) < 0)
+		return r;
+
+	memmove((void *)(UXSTACKTOP - PGSIZE), PFTEMP, PGSIZE);
+
+	if ((r = sys_page_unmap(thisenvid, PFTEMP)) < 0)
+		return r;
+
+	extern void _pgfault_upcall(void);
+	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+		return r;
+
+	return envid;
+}
+```
+
+测试代码：
+
+```java
+// user/sfork.c
+
+#include <inc/lib.h>
+
+uint32_t share_val = 0;
+
+void umain(int argc, char* argv[]) {
+    envid_t who;
+    if((who = sfork()) == 0) {
+        cprintf("child: %d\n", share_val);
+        share_val = 1000;
+        sys_yield();
+        cprintf("child: %d\n", share_val);
+        share_val = 10000;
+        return;
+    }
+
+
+    sys_yield();
+    sys_yield();
+    cprintf("parent: %d\n", share_val);
+    share_val++;
+    sys_yield();
+    sys_yield();
+    cprintf("parent: %d\n", share_val);
+    return;
+}
+```
+
+为了能够`make run-sfork`执行这段代码，需要在`kern/Makefrag`中加入
+
+```
+KERN_BINFILES +=	user/sfork
+```
+
+测试结果：
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1es303z6ltxj20x20mmgu0.jpg =600x)
+
+刚开始时`shared_val`为0，child将其改为`1000`，父亲处输出了`parent: 1000`，然后父亲将其加1，child输出`child: 1001`并将其改为`10000`，父亲输出了`10000`。正确。
