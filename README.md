@@ -1,709 +1,793 @@
-# JOS Lab 2 Report
-
-[TOC]
+# JOS Lab 3 Report<br/><small><small><small><small>江天源 1100016614</small></small></small></small>
 
 ## 总体概述
 
 
 ## 完成情况
 
-|#|E1|E2|E3|Q1|E4|E5|Q2~6|C1|C2|C3|C4|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|Status|√|√|√|√|√|√|√|√|√|√|√|
+|#|E1|E2|E3|E4&C1|E5|E6|C2|E7|C3|E8|E9|E10|
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+|Status|√|√|√|√|√|√|√|√|x|√|√|√|
+
+|#|Q1|Q2|Q3|Q4|
+|:-:|:-:|:-:|:-:|:-:|
+|Status|√|√|√|√|
 
 <small>* 其中E#代表Exercise #, Q#代表Question #, C# 代表Challenge #</small>
 
-### Part 1: Physical Page Management
+`make grade`结果
+
+![](http://ww3.sinaimg.cn/large/6313a6d8jw1er61jhpdfij20xk0mugs3.jpg =600x)
+
+### Part A: User Environments and Exception Handling
 
 #### Exercise 1
-> In the file `kern/pmap.c`, you must implement code for the following functions (probably in the order given).
 
->      boot_alloc()
->      mem_init() (only up to the call to check_page_free_list(1))
->      page_init()
->      page_alloc()
->      page_free()
+>Modify `mem_init()` in `kern/pmap.c` to allocate and map the `envs` array. This array consists of exactly `NENV` instances of the `Env` structure allocated much like how you allocated the `pages` array. Also like the `pages` array, the memory backing `envs` should also be mapped user read-only at `UENVS` (defined in `inc/memlayout.h`) so user processes can read from this array.
 
->`check_page_free_list()` and `check_page_alloc()` test your physical page allocator. You should boot JOS and see whether `check_page_alloc()` reports success. Fix your code so that it passes. You may find it helpful to add your own `assert()`s to verify that your assumptions are correct.
-
-`boot_alloc():`这个函数仅在系统初始化虚拟内存时来给页目录和页表分配空间。该函数的功能是分配能包含`n`个bytes的连续的对齐到页的空间。当`n==0`时，可以用来找到下一个空闲页。实现代码如下：
-```
-result = nextfree;
-
-if (n > 0) {
-   if (PADDR(nextfree) + n > npages * PGSIZE) {
-      panic("boot_alloc: Insufficient memory for initial allocation\n");
-   }
-
-   nextfree = ROUNDUP((char *)nextfree + n, PGSIZE);
-}
-
-return result;
-```
-
-`mem_init()`中添加了为`pages`分配空间的代码，其中每一个`PageInfo`保存了对应物理页的元数据：
+对envs数组模仿着Lab 2中的做法声明空间并映射到虚存即可。
 
 ```c
-struct PageInfo {
-   // Next page on the free list.
-   struct PageInfo *pp_link;
-
-   // pp_ref is the count of pointers (usually in page table entries)
-   // to this page, for pages allocated using page_alloc.
-   // Pages allocated at boot time using pmap.c's
-   // boot_alloc do not have valid reference count fields.
-
-   uint16_t pp_ref;
-};
+envs = (struct Env *) boot_alloc(NENV * sizeof(struct Env));
+...
+boot_map_region(kern_pgdir, UPAGES, PTSIZE, PADDR(pages), PTE_U);
 ```
-
-实现代码如下：
-
-```c
-pages = (struct PageInfo *) boot_alloc(npages * sizeof(struct PageInfo));
-memset(pages, 0, npages * sizeof(struct PageInfo));
-```
-
-`page_init()`中初始化了页描述符表。空闲页列表由一个简单的链表结构实现，每一个页对应的`PageInfo`中的`pp_link`保存了这个页在空闲页列表中前一个空闲页的位置。若该页已被分配，则`pp_link==NULL`。
-
-初始化空闲页列表时有几个部分需要进行考虑：
-
-1. 物理页`0`，其中保存了`IDT`和`BIOS`；
-2. 为各种IO设备预留的空间`[IOPHYSMEM, EXTPHYSMEM)`；
-3. 其他已经被使用的空间(包括kernel代码、页目录、页描述符表占的空间)。
-
-最后一部分只要直接调用前面写的`boot_alloc(0)`即可得到其结束的位置。
-
-实现代码如下：
-```
-size_t i, range_io, range_ext, free_top;
-for (i = 0; i < npages; i++) {
-   pages[i].pp_ref = 0;
-   pages[i].pp_link = page_free_list;
-   page_free_list = &pages[i];
-}
-extern char end[];
-range_io = PGNUM(IOPHYSMEM);
-range_ext = PGNUM(EXTPHYSMEM);
-free_top = PGNUM(PADDR(boot_alloc(0)));
-
-// 1) Mark physical page 0 as in use.
-pages[1].pp_link = pages[0].pp_link;
-pages[0].pp_link = NULL;
-
-// 3) IO hole [IOPHYSMEM, EXTPHYSMEM)
-pages[range_ext].pp_link = pages[range_io].pp_link;
-for (i = range_io; i < range_ext; i++)
-   pages[i].pp_link = NULL;
-
-// 4) extended memory
-pages[free_top].pp_link = pages[range_ext].pp_link;
-for (i = range_ext; i < free_top; i++)
-   pages[i].pp_link = NULL;
-```
-
-`page_alloc()`：如其名，用来分配一个页，实现也很容易，只需将空闲列表最后一项指向其下一页，再将该页描述符的指针清空即可：
-
-```
-struct PageInfo *
-page_alloc(int alloc_flags)
-{
-   struct PageInfo *pp;
-   pp = page_free_list;
-
-   if (pp) {
-      page_free_list = pp->pp_link;
-      if (alloc_flags & ALLOC_ZERO)
-         memset(page2kva(pp), 0, PGSIZE);
-      pp->pp_link = NULL;
-   } else
-      return NULL;
-
-   return pp;
-}
-```
-
-`page_free()`：释放一个页，仅在动态引用它的指针数量为0时调用。实现只需将其插入空闲页列表的最后即可：
-
-```
-void
-page_free(struct PageInfo *pp)
-{
-   // Hint: You may want to panic if pp->pp_ref is nonzero or
-   // pp->pp_link is not NULL.
-   if (pp->pp_ref)
-      panic("page_free: Page reference counter nonzero");
-   if (pp->pp_link)
-      panic("page_free: Double-free attemps");
-
-   pp->pp_link = page_free_list;
-   page_free_list = pp;
-}
-```
-
-### Part 2: Virtual Memory
 
 #### Exercise 2
 
-> Look at chapters 5 and 6 of the [Intel 80386 Reference Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/toc.htm), if you haven't done so already. Read the sections about page translation and page-based protection closely (5.2 and 6.4). We recommend that you also skim the sections about segmentation; while JOS uses paging for virtual memory and protection, segment translation and segment-based protection cannot be disabled on the x86, so you will need a basic understanding of it.
+>In the file env.c, finish coding the following functions:
+>
+   env_init()
+   env_setup_vm()
+   region_alloc()
+   load_icode()
+   env_create()
+   env_run()
 
-阅读了其中的第5章和第6章，内容都在上学期操统课程中学习过了。这里简单概述一下要点。
 
-首先，在JOS的设计中，Linear Address的Segment Selector长度为0，其Offset就等于Virtual Address，也就是说在JOS中Linear Address与Virtual Address是等价的。
+**`env_init()`** 注释里说明了要求`env_free_list`中的顺序与`envs`数组的顺序一致，因此需要倒着将`envs`中的元素插入`env_free_list`：
 
-![Format of a Linear Address](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/fig5-8.gif)
+```c
+void
+env_init(void)
+{
+   // Set up envs array
+   // LAB 3: Your code here.
+   int i;
+   for (i = NENV-1; i >= 0; i--) {
+      envs[i].env_status = ENV_FREE;
+      envs[i].env_id = 0;
+      envs[i].env_link = env_free_list;
+      env_free_list = envs + i;
+   }
 
-在分页机制下，一个Linear Address被分为三个部分`DIR[22,31]`、`PAGE[12,21]`、`OFFSET[0,11]`，其中`DIR`用来找到该地址所在物理页对应的页目录项，之后再依次根据`PAGE`、`OFFSET`最终确定其物理地址。
+   // Per-CPU part of the initialization
+   env_init_percpu();
+}
+```
 
-![Page Translation](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/fig5-9.gif)
+**`env_setup_vm()`** 将已经申请好的页分配给`env_pgdir`，再将`kern_pgdir`的内容直接拷贝给它既可，由于用户环境的页是动态映射过来的，需要增加pp_ref计数：
 
-此外，页目录项和页表项的`1`和`2`位用来保存其权限设置。处理器执行指令时，会检查当先的`CPL`以及访问目标的权限设置，以判断该该指令的权限是否满足。
+```c
+static int
+env_setup_vm(struct Env *e)
+{
+   int i;
+   struct PageInfo *p = NULL;
 
-![enter image description here](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/fig6-10.gif)
+   // Allocate a page for the page directory
+   if (!(p = page_alloc(ALLOC_ZERO)))
+      return -E_NO_MEM;
 
+   // LAB 3: Your code here.
+   e->env_pgdir = (pde_t *) page2kva(p);
+   p->pp_ref++;
+
+   memcpy(e->env_pgdir, kern_pgdir, PGSIZE);
+
+   // UVPT maps the env's own page table read-only.
+   // Permissions: kernel R, user R
+   e->env_pgdir[PDX(UVPT)] = PADDR(e->env_pgdir) | PTE_P | PTE_U;
+
+   return 0;
+}
+```
+
+**`region_alloc()`** 为了方便使用，`va`和`va + len`不要求按页对齐，所以进来之后需要将`va` ROUNDDOWN，将`va + len` ROUNDUP；之后再在范围内逐页分配即可：
+
+
+```c
+static void
+region_alloc(struct Env *e, void *va, size_t len)
+{
+   // LAB 3: Your code here.
+   // (But only if you need it for load_icode.)
+   //
+   // Hint: It is easier to use region_alloc if the caller can pass
+   //   'va' and 'len' values that are not page-aligned.
+   //   You should round va down, and round (va + len) up.
+   //   (Watch out for corner-cases!)
+   void *vas, *vat;
+
+   vas = ROUNDDOWN(va, PGSIZE);
+   vat = ROUNDUP(va + len, PGSIZE);
+
+   for (; vas < vat; vas += PGSIZE) {
+      struct PageInfo *pp = page_alloc(0);
+      if (pp == NULL)
+         panic("region_alloc: allocation failed.");
+      page_insert(e->env_pgdir, pp, vas, PTE_U | PTE_W);
+   }
+
+}
+```
+
+**`load_icode()`** 仿照`boot/main.c`中读取kernel的部分写即可；其中需要即将读取的空间清零，再读入数据；过程中应该使用对应环境的页目录，并在之后恢复；再设置好新环境的`eip`执行文件的入口`e_entry`，最后为新环境分配好初始栈即可：
+
+```c
+static void
+load_icode(struct Env *e, uint8_t *binary)
+{
+   // LAB 3: Your code here.
+   struct Elf *ELFHDR;
+   struct Proghdr *ph, *eph;
+
+   ELFHDR = (struct Elf *) binary;
+
+   if (ELFHDR->e_magic != ELF_MAGIC)
+      panic("load_icode: not ELF executable.");
+
+   ph = (struct Proghdr *) (binary + ELFHDR->e_phoff);
+   eph = ph + ELFHDR->e_phnum;
+
+   lcr3(PADDR(e->env_pgdir));
+
+   for (; ph < eph; ph++) {
+      if (ph->p_type == ELF_PROG_LOAD) {
+         region_alloc(e, (void *) ph->p_va, ph->p_memsz);
+         memset((void *) ph->p_va, 0, ph->p_memsz);
+         memcpy((void *) ph->p_va, binary + ph->p_offset, ph->p_filesz);
+      }
+   }
+
+   lcr3(PADDR(kern_pgdir));
+
+   e->env_tf.tf_eip = ELFHDR->e_entry;
+
+   // Now map one page for the program's initial stack
+   // at virtual address USTACKTOP - PGSIZE.
+
+   // LAB 3: Your code here.
+   region_alloc(e, (void *) (USTACKTOP - PGSIZE), PGSIZE);
+}
+```
+
+**`env_create()`** 调用`load_icode`读取`binary`，并设置好`env_type`就行了：
+
+```c
+void
+env_create(uint8_t *binary, enum EnvType type)
+{
+   // LAB 3: Your code here.
+   struct Env *e;
+   int errorcode;
+
+   if ((errorcode=env_alloc(&e, 0)) < 0)
+      panic("env_create: %e", errorcode);
+
+   load_icode(e, binary);
+
+   e->env_type = type;
+}
+```
+
+**`env_run()`** 改变当前环境的状态为`ENV_RUNNABLE`，并设置将要执行的环境的状态为正在运行`ENV_RUNNING`；之后再将页目录设置为新环境的页目录，并将用户环境的`TrapFrame`恢复即可：
+
+```c
+void
+env_run(struct Env *e)
+{
+   // LAB 3: Your code here.
+
+   if (curenv)
+      curenv->env_status = ENV_RUNNABLE;
+   curenv = e;
+   e->env_status = ENV_RUNNING;
+   e->env_runs++;
+   lcr3(PADDR(e->env_pgdir));
+   env_pop_tf(&e->env_tf);
+}
+
+```
 
 #### Exercise 3
 
-> While GDB can only access QEMU's memory by virtual address, it's often useful to be able to inspect physical memory while setting up virtual memory. Review the QEMU [monitor commands](http://pdosnew.csail.mit.edu/6.828/2014/labguide.html#qemu) from the lab tools guide, especially the xp command, which lets you inspect physical memory. To access the QEMU monitor, press `Ctrl-a c` in the terminal (the same binding returns to the serial console).
+>Read [Chapter 9, Exceptions and Interrupts](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/c09.htm) in the [80386 Programmer's Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/toc.htm) (or Chapter 5 of the [IA-32 Developer's Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf)), if you haven't already.
 
->Use the `xp` command in the QEMU monitor and the `x` command in GDB to inspect memory at corresponding physical and virtual addresses and make sure you see the same data.
+![](http://ww4.sinaimg.cn/large/6313a6d8gw1er4xrqw3cnj20ue108qgt.jpg =600x)
 
->Our patched version of QEMU provides an `info pg` command that may also prove useful: it shows a compact but detailed representation of the current page tables, including all mapped memory ranges, permissions, and flags. Stock QEMU also provides an `info mem` command that shows an overview of which ranges of virtual memory are mapped and with what permissions.
+![](http://ww3.sinaimg.cn/large/6313a6d8gw1er4xssvikcj20ue0g60zq.jpg =600x)
 
-这里提到的几个指令对后面的Exercise很有帮助，其中需要注意的是`Ctrl+a c`指令需要先按下`Ctrl+a`，放手后再按`c`。
+#### Exercise 4 & Challenge 1
+
+>**Exercise 4**. Edit `trapentry.S` and `trap.c` and implement the features described above. 
+
+>Your `_alltraps` should:
+>
+- push values to make the stack look like a `struct Trapframe`
+- load `GD_KD` into `%ds` and `%es`
+- `pushl %esp` to pass a pointer to the `Trapframe` as an argument to `trap()`
+- call `trap` (can trap ever return?)
+- Consider using the `pushal` instruction; it fits nicely with the layout of the `struct Trapframe`.
+
+>Test your trap handling code using some of the test programs in the user directory that cause exceptions before making any system calls, such as user/divzero. You should be able to get make grade to succeed on the divzero, softint, and badsegment tests at this point.
+
+>**Challenge**. You probably have a lot of very similar code right now, between the lists of `TRAPHANDLER` in `trapentry.S` and their installations in `trap.c`. Clean this up. Change the macros in `trapentry.S` to automatically generate a table for `trap.c` to use. Note that you can switch between laying down code and data in the assembler by using the directives `.text` and `.data`.
+
+看了Challenge 1发现是要改变Exercise 4里面的写法，所以就直接按照Challenge要求的做法做了。
+
+先把`_alltraps`实现了：
+
+> - push values to make the stack look like a `struct Trapframe`
+- load `GD_KD` into `%ds` and `%es`
+- `pushl %esp` to pass a pointer to the `Trapframe` as an argument to `trap()`
+- call `trap` (can trap ever return?)
+
+
+在`inc/trap.h`中：
+
+```c
+struct Trapframe {
+   struct PushRegs tf_regs;
+   uint16_t tf_es;
+   uint16_t tf_padding1;
+   uint16_t tf_ds;
+   uint16_t tf_padding2;
+   uint32_t tf_trapno;
+   /* below here defined by x86 hardware */
+   uint32_t tf_err;
+   uintptr_t tf_eip;
+   uint16_t tf_cs;
+   uint16_t tf_padding3;
+   uint32_t tf_eflags;
+   /* below here only when crossing rings, such as from user to kernel */
+   uintptr_t tf_esp;
+   uint16_t tf_ss;
+   uint16_t tf_padding4;
+} __attribute__((packed));
+
+```
+
+从最下到`tf_err`都是有硬件自动完成，`trapno`在`TRAPHANDLER(_NOEC)`中推入栈中，这里需要压入的就是`tf_trapno`之上的几个参数；剩下的按照题目写就好了：
+
+```asm
+pushl %ds
+pushl %es
+pushal
+movw $GD_KD, %ax
+movw %ax, %ds
+movw $GD_KD, %ax
+movw %ax, %es
+pushl %esp
+call trap
+```
+
+之后开始初始化trap。为了在`trap_init()`中能循环调用SETGATE，需要将这些trap的handler放到一个全局的数组里；为了做到这一点需要将每一个handler的名称在`.data`中声明。修改后的`TRAPHANDLER`如下(`TRAPHANDLER_NOEC`类似)：
+
+```asm
+#define TRAPHANDLER(name, num)                  \
+.data;\
+   .long name;\
+.text;\
+   .globl name;      /* define global symbol for 'name' */  \
+   .type name, @function;  /* symbol type is function */    \
+   .align 2;      /* align function definition */     \
+   name:       /* function starts here */    \
+   pushl $(num);                    \
+   jmp _alltraps
+```
+
+根据Exercise 3中读到的各个Trap的使用情况，在`kern/trapentry.S`中声明handler数组：
+
+```asm
+.data
+   .globl handler
+   .align 4
+handler:
+.text
+/*
+ * Lab 3: Your code here for generating entry points for the different traps.
+ */
+   TRAPHANDLER_NOEC(handler0, T_DIVIDE);
+   TRAPHANDLER_NOEC(handler1, T_DEBUG);
+   TRAPHANDLER_NOEC(handler2, T_NMI);
+   TRAPHANDLER_NOEC(handler3, T_BRKPT);
+   TRAPHANDLER_NOEC(handler4, T_OFLOW);
+   TRAPHANDLER_NOEC(handler5, T_BOUND);
+   TRAPHANDLER_NOEC(handler6, T_ILLOP);
+   TRAPHANDLER_NOEC(handler7, T_DEVICE);
+   TRAPHANDLER(handler8, T_DBLFLT);
+   # TRAPHANDLER(handler9, 9);
+   dummy();
+   TRAPHANDLER(handler10, T_TSS);
+   TRAPHANDLER(handler11, T_SEGNP);
+   TRAPHANDLER(handler12, T_STACK);
+   TRAPHANDLER(handler13, T_GPFLT);
+   TRAPHANDLER(handler14, T_PGFLT);
+   # TRAPHANDLER(handler15, 15);
+   dummy();
+   TRAPHANDLER_NOEC(handler16, T_FPERR);
+   TRAPHANDLER_NOEC(handler17, T_ALIGN);
+   TRAPHANDLER_NOEC(handler18, T_MCHK);
+   TRAPHANDLER_NOEC(handler19, T_SIMDERR);
+```
+
+其中`dummy()`用于占位，否则数组中元素对应的trapno会错位。`dummy`定义如下：
+
+```asm
+#define dummy()\
+.data;\
+   .long 0
+```
+
+最后完成`kern/trap.c`中`trap_init`即可，其中3号Trap需要在用户态触发所以dpl为3：
+
+```c
+void
+trap_init(void)
+{
+   extern struct Segdesc gdt[];
+
+   // LAB 3: Your code here.
+   extern void (*handler[])();
+   int dpl;
+   
+   int i;
+   for (i = 0; i <= 19; i++) {
+      if (i != 9 && i != 15) {
+         dpl = 0;
+         if (i == T_BRKPT)
+            dpl = 3;
+         SETGATE(idt[i], 0, GD_KT, handler[i], dpl);
+      }
+   }
+
+   // Per-CPU setup 
+   trap_init_percpu();
+}
+
+```
+
 
 #### Question 1
 
->Assuming that the following JOS kernel code is correct, what type should variable `x` have, `uintptr_t` or `physaddr_t`?
-```
-   mystery_t x;
-   char* value = return_a_pointer();
-   *value = 10;
-   x = (mystery_t) value;
-```
-`uintptr_t`：`x`保存的是为`value`对应的地址，由于对`value`进行了解引用操作而且这个操作是“correct”的，所以可以得出`value`对应的地址是一个虚拟地址的结论，因此`x`的类型为`uintptr_t`。
+>What is the purpose of having an individual handler function for each exception/interrupt? (i.e., if all exceptions/interrupts were delivered to the same handler, what feature that exists in the current implementation could not be provided?)
 
-#### Exercise 4
+分别使用handler是为了能够方便快捷地直接为对应的异常/中断找到处理函数的入口，如果使用统一的handler处理所有的中断，需要添加参数来表示这是哪一个中断，而且对于errorcode需要进行判断才能决定是否要压入一个0来做padding还是系统已经自动地压入了。
 
->In the `file kern/pmap.c`, you must implement code for the following functions.
+#### Question 2
 
->      pgdir_walk()
->      boot_map_region()
->      page_lookup()
->      page_remove()
->      page_insert()
+>Did you have to do anything to make the user/softint program behave correctly? The grade script expects it to produce a general protection fault (trap 13), but softint's code says `int $14`. Why should this produce interrupt vector 13? What happens if the kernel actually allows softint's `int $14` instruction to invoke the kernel's page fault handler (which is interrupt vector 14)?
 
->`check_page()`, called from `mem_init()`, tests your page table management routines. You should make sure it reports success before proceeding.
+用户态没有权限直接触发page fault，因此产生general protection fault是正常的现象，无需进行修改。如果kernel允许用户`int $14`的话可能就会有错误的或者有恶意的程序疯狂地申请新的页，耗尽内存资源。
 
-`pgdir_walk()`用来找到一个虚拟地址`va`所对应的页表项`PTE`，在后面很多地方都会用上这个函数。根据注释，由于x86 MMU会同时在页目录和页表中检查权限，因此页目录的权限设置会比较宽容。此外，在过程中如果将要访问未分配的页，则调用`page_alloc`分配一个页。实现如下：
-
-```
-pte_t *
-pgdir_walk(pde_t *pgdir, const void *va, int create)
-{
-   struct PageInfo *pp;
-   pde_t *pdp;
-
-   pdp = &pgdir[PDX(va)];
-
-   if (*pdp & PTE_P) 
-      return (pte_t *) KADDR(PTE_ADDR(*pdp)) + PTX(va);
-   else if (create && (pp = page_alloc(1))) {
-      pp->pp_ref++;
-      *pdp = page2pa(pp) | PTE_P | PTE_W | PTE_U;
-      return (pte_t *) KADDR(PTE_ADDR(*pdp)) + PTX(va);
-   }
-   return NULL;
-}
-```
-
-`boot_map_region()`马上就用到了刚才实现的`pgdir_walk`——映射的时候只需将每一页大小的物理内存映射到虚拟内存即可，过程中页表的访问通过`pgdir_walk`可完成。
-
-```
-static void
-boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
-{
-   pte_t *ptep;
-   uintptr_t cv;
-   physaddr_t cp;
-
-   for (cv = 0, cp = pa; cv < size; 
-        cv += PGSIZE, cp += PGSIZE) {
-      ptep = pgdir_walk(pgdir, (const void *) (va + cv), 1);
-      if (ptep)
-         *ptep = cp | perm | PTE_P;
-   }
-}
-```
-
-`page_lookup()`查找`va`映射的物理页，根据需求保存对应`pte`到`pte_store`中。
-
-```
-struct PageInfo *
-page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
-{
-   pte_t *ptep;
-
-   ptep = pgdir_walk(pgdir, va, 0);
-   if (ptep) {
-      if (pte_store)
-         *pte_store = ptep;
-      return pa2page(PTE_ADDR(*ptep));
-   } else
-      return NULL;
-}
-```
-
-`page_remove()`清除虚拟地址`va`的映射，并减小其之前对应的物理页的引用计数（为0时则调用`page_free`将物理页放回空闲列表）。此外还需要调用`tlb_invalidate`清除`tlb`缓存。
-
-```
-void
-page_remove(pde_t *pgdir, void *va)
-{
-   struct PageInfo *pp;
-   pte_t *pte;
-
-   pp = page_lookup(pgdir, va, &pte);
-
-   if (pp) {
-      page_decref(pp);
-      *pte = 0;
-      tlb_invalidate(pgdir, va);
-   }
-}
-```
-
-`page_insert()`将一个增加一个物理页`pp`到虚拟地址`va`的映射，若`va`之前有映射到其他的地方，则先调用`page_remove`将之前的映射清除。
-
-```
-int
-page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
-{
-   pte_t *ptep;
-
-   ptep = pgdir_walk(pgdir, va, 1);
-   if (ptep) {
-      pp->pp_ref++;
-      if (PTE_ADDR(*ptep))
-         page_remove(pgdir, va);
-      *ptep = page2pa(pp) | perm | PTE_P;
-      return 0;
-   } else
-      return -E_NO_MEM;
-}
-```
-
-### Part 3: Kernel Address Space
-
+### Part B: Page Faults, Breakpoints Exceptions, and System Calls
 
 #### Exercise 5
 
->Fill in the missing code in `mem_init()` after the call to `check_page()`.
+>Modify `trap_dispatch()` to dispatch page fault exceptions to `page_fault_handler()`. You should now be able to get make grade to succeed on the `faultread`, `faultreadkernel`, `faultwrite`, and `faultwritekernel` tests. If any of them don't work, figure out why and fix them. Remember that you can boot JOS into a particular user program using `make run-x` or `make run-x-nox`.
 
->Your code should now pass the `check_kern_pgdir()` and `check_page_installed_pgdir()` checks.
-
-这道题在之前几个Exercise基础上实现非常容易。分别将页描述符表、内核栈空间的物理空间映射到了虚拟地址空间，然后将KERNBASE之上的所有内容与物理地址从`0`开始的位置映射起来。直接调用`boot_map_region`即可完成。其中`0x10000000=0xFFFFFFFF-KERNBASE+1`，即为KERNBASE上所有地址空间的大小。实现如下：
-
-```
-boot_map_region(kern_pgdir, UPAGES, PTSIZE, PADDR(pages), PTE_U);
-
-boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W);
-
-boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W);
-```
-
-`make grade`结果：
-
-![enter image description here](http://ww3.sinaimg.cn/large/6313a6d8jw1eqaz3fkz56j211g0n8agf.jpg)
-
-#### Question 2~6
-
-##### Question 2
->What entries (rows) in the page directory have been filled in at this point? What addresses do they map and where do they point? In other words, fill out this table as much as possible:
-
-|Entry|Base Virtual Address|Points to (logically):|
-|:--:|:--:|:--|
-|1023|0xFFC00000|Page table for top 4MB of phys memory|
-|1022|0xFF800000|Page table for the next 4MB of phys memory|
-|.|?|?|
-|960|0xF0000000|Page table for bottom 4MB of phys memory|
-|959|0xEFC00000|Kernel Stack|
-|958|0xEF800000|Memory-mapped I/O|
-|957|0xEF400000|Read-only copies of page structures|
-|956|0xEF000000|User read-only virtual page table|
-|.|?|?|
-|2|0x00800000|?|
-|1|0x00400000|?|
-|0|0x00000000|[see next question]|
-
-##### Question 3
-
->We have placed the kernel and user environment in the same address space. Why will user programs not be able to read or write the kernel's memory? What specific mechanisms protect the kernel memory?
-
-Page Directory Entry和Page Table Entry中的低12位中保存了相关的权限位，包括`PTE_U`、`PTE_W`；`PTE_U`位表示用户特权，`PTE_W`位设置为1表示可写。根据[Intel® 64 and IA-32 Architectures Software Developer’s Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf)中，页目录项与页表项权限位设置与实际访问/读写权限的关系如下表所示：
-
-![enter image description here](http://ww4.sinaimg.cn/large/6313a6d8jw1eq7bnrw8enj216k10i7g2.jpg)
-
-在分页机制开启后，将虚拟内存映射到物理内存过程中，kernel会去检查权限位的设置，以实现保护。
-
-##### Question 4
-
-> What is the maximum amount of physical memory that this operating system can support? Why?
-
-UPAGES区的大小为PTSIZE，所有的PageInfo都必须能放在其中，即最多有`PTSIZE/sizeof(PageInfo) = (PGSIZE*NPTENTRIES)/sizeof(PageInfo) = 512K`个PageInfo。
-
-每个PageInfo对应1个物理页，即4096 Bytes。因此总的最大能覆盖的物理内存的大小是：$512K \times 4096 Bytes =  2 GBytes$。
-
-##### Question 5
-
-> How much space overhead is there for managing memory, if we actually had the maximum amount of physical memory? How is this overhead broken down?
-
-Page Directory 需要 `1 * PGSIZE`
-Page Tables 需要`NPTENTRIES * PGSIZE`
-PageInfo数组需要`1 PTSIZE`(在内存中预留了这么多空间)
-总计：`4K + 4M + 4M = 8M + 4K (Bytes)`
-
-##### Question 6
-> Revisit the page table setup in `kern/entry.S` and `kern/entrypgdir.c`. Immediately after we turn on paging, EIP is still a low number (a little over 1MB). At what point do we transition to running at an EIP above KERNBASE? What makes it possible for us to continue executing at a low EIP between when we enable paging and when we begin running at an EIP above KERNBASE? Why is this transition necessary?
-
-```
-   # kern/Entry.S
-   
-   59    # Turn on paging.
-   60    movl  %cr0, %eax
-   61    orl   $(CR0_PE|CR0_PG|CR0_WP), %eax
-   62    movl  %eax, %cr0
-   63  
-   64    # Now paging is enabled, but we're still running at a low EIP
-   65    # (why is this okay?).  Jump up above KERNBASE before entering
-   66    # C code.
-   67    mov   $relocated, %eax
-   68    jmp   *%eax
-   69  relocated:
-   ...
-```
-
-`kern/Entry.S`中67、68两行非直接跳转到`relocated`，就是这两句话将`EIP`跳转到`KERNBASE`之上。
-
-在开启分页之后、转移之前仍能在低地址运行时因为在`kern/entrypgdir.c`同时定义了从低地址`[0, 4MB)`和高地址`[KERNBASE, KERNBASE+4MB)`到物理内存`[0, 4MB)`的映射。
-
-跳转到69行`relocated`之后`EIP`开始在`KERNBASE`之上跑。这个跳转是必要的是因为如果不进行跳转，则计算机并不知道下一条指令是在高地址还是在低地址，只会继续在低地址的范围运行。
-
-#### Challenge 1
-
->We consumed many physical pages to hold the page tables for the KERNBASE mapping. Do a more space-efficient job using the PTE_PS ("Page Size") bit in the page directory entries. This bit was not supported in the original 80386, but is supported on more recent x86 processors. You will therefore have to refer to [Volume 3](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf) of the current Intel manuals. Make sure you design the kernel to use this optimization only on processors that support it!
-
-由 [the Intel manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf)，
-
->**3.7.3. Mixing 4-KByte and 4-MByte Pages**
->When the PSE flag in CR4 is set, both 4-MByte pages and page tables for 4-KByte pages can be accessed from the same page directory. If the PSE flag is clear, only page tables for 4-KByte pages can be accessed (regardless of the setting of the PS flag in a page-directory entry).
->A typical example of mixing 4-KByte and 4-MByte pages is to place the operating system or executive’s kernel in a large page to reduce TLB misses and thus improve overall system performance.
-The processor maintains 4-MByte page entries and 4-KByte page entries in separate TLBs. So, placing often used code such as the kernel in a large page, frees up 4-KByte-page TLB entries for application programs and tasks.
-
-要打开`4M`页表首先要设置cr4中的`PSE`标志。之后在若将页目录项中的7号位`PS`置为1则可将其设置为`4M`模式，其页目录项的页基址直接指向内存中大小为`4MB`的物理页，对于未设置`PS`标志的则与之前一样指向大小为`4KB`的页表。
-
-![enter image description here](http://ww1.sinaimg.cn/large/6313a6d8jw1eqadpc95psj212e0lojvi.jpg)
-
-`4MB`的页目录项结构如上图所示，与`4KB`的页目录项和页表项的主要区别在于其中`[13,21]`位被设置为`0`，这是因为虚拟地址（如下图所示）中低21位`[0,20]`都要用被用来作为`Offset`，为了兼容性依然只有`[0,12]`位用于各种标记，因此`[13,21]`位就被保留为了`0`。
-
-![enter image description here](http://ww3.sinaimg.cn/large/6313a6d8jw1eqadr81nlhj212s0l2ju9.jpg)
-
-参考上面引用的Intel Manual的内容，`4MB`页的一个用法就是用`4MB`页来保存`kernel`部分的内容，并使用分别的`TLB`来管理，以降低访问内核的`TLB`miss率以及总体性能。
-
-**具体实现**
-
-首先在`kern/pmap.c mem_init()`中设置`cr4`：
+修改`trap_dispatch()`，直接按题目意思写就过了：
 
 ```c
-   // Set cr4 to enable 4-MByte paging
-   cr4 = rcr4();
-   cr4 |= CR4_PSE;
-   lcr4(cr4);
-```
-
-并修改`KERNBASE`以上区域的映射时的全选设置，添加进`PTE_PS`标记：
-
-```c
-boot_map_region(kern_pgdir, KERNBASE, 0x10000000, 0, PTE_W | (PTE_PS & PSE_ENABLED));
-```
-
-其中`PSE_ENABLED`是自己定义的全局变量，用来开启/关闭`PSE`机制。
-
-现在由于页目录项的结构有所变化，因此`boot_map_region`函数内部的实现也需要有所改变，在需要设置`PTE_PS`时，直接改变对应页目录项的值：
+if (tf->tf_trapno == T_PGFLT) {
+   page_fault_handler(tf);
+   return;
+}
 
 ```
-static void
-boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
-{
-   pte_t *ptep;
-   uintptr_t cv;
-   physaddr_t cp;
 
-   if (perm & PTE_PS) {
-      for (cv = 0, cp = pa; cv < size; cv += PTSIZE, cp += PTSIZE) {
-         ptep = &pgdir[PDX(va + cv)];
-         *ptep = cp | perm | PTE_P;
-      }
-   } else {
-      for (cv = 0, cp = pa; cv < size; cv += PGSIZE, cp += PGSIZE) {
-         ptep = pgdir_walk(pgdir, (const void *) (va + cv), 1);
-         if (ptep)
-            *ptep = cp | perm | PTE_P;
-      }
-   }
+#### Exercise 6
+
+>Modify `trap_dispatch()` to make breakpoint exceptions invoke the kernel monitor. You should now be able to get `make grade` to succeed on the breakpoint test.
+
+在`trap_dispatch()`中添加对breakpoint事件的处理，到达breakpoint后暂停当前用户程序进入monitor：
+
+```
+if (tf->tf_trapno == T_BRKPT) {
+   monitor(tf);
+   return;
 }
 ```
-
-到这里`4MB`页的设置就完成了。但是如果这个时候执行`make grade`的话`check_va2pa`中会报错。这是因为`check_va2pa`将所有的页目录项一视同仁，进行两级的寻址；然而在`4MB`页开启之后，有些页目录项之后直接指向的是对应的物理页，而不能进行两级查找。因此我在`check_va2pa`中添加了如下代码作为应对：
-
-```
-if (*pgdir & PTE_PS & PSE_ENABLED)
-   return PTE_ADDR(*pgdir) | (PTX(va) << PTXSHIFT);
-```
-
-这段代码只有在`PSE`机制开启后才会生效。
-
-**测试运行结果**
-
-在`qemu`中输入`info pg`打印出页表的状态：
-
-![Page Table](http://ww3.sinaimg.cn/large/6313a6d8jw1eqatry3ea5j21160d0n49.jpg)
-
-其中`PDE[3bd]`即为页目录的自映射，其中每一项对应着页目录中的每一项。`PDE[3c0-3d0]`、`PDE[3d1-3ff]`即为`KERNBASE`之上，也就是刚才设置为了`4MB`页模式的目录项。可以看到这两个目录项下并没有`PTE`，并且对应的物理页恰好覆盖了物理内存的前`256MB`。
-
-现在`4MB`的静态映射虽然已经成功了，但是由于`JOS`的代码中目前物理页分配完全基于针对`4KB`页的PageInfo数组和空闲页链表，无法直接进行`4MB`页的动态分配。如果要实现对`4MB`页的分配就需要将整个物理页管理的方式进行重写过于复杂了`_(:з」∠)_`。目前这样也能工作暂且就不修改了。。
-
 
 #### Challenge 2
 
->Extend the JOS kernel monitor with commands to:
+>Modify the JOS kernel monitor so that you can 'continue' execution from the current location (e.g., after the `int3`, if the kernel monitor was invoked via the breakpoint exception), and so that you can single-step one instruction at a time. You will need to understand certain bits of the `EFLAGS` register in order to implement single-stepping.
 
->- Display in a useful and easy-to-read format all of the physical page mappings (or lack thereof) that apply to a particular range of virtual/linear addresses in the currently active address space. For example, you might enter 'showmappings 0x3000 0x5000' to display the physical page mappings and corresponding permission bits that apply to the pages at virtual addresses 0x3000, 0x4000, and 0x5000.
-- Explicitly set, clear, or change the permissions of any mapping in the current address space.
-- Dump the contents of a range of memory given either a virtual or physical address range. Be sure the dump code behaves correctly when the range extends across page boundaries!
-- Do anything else that you think might be useful later for debugging the kernel. (There's a good chance it will be!)
+>Optional: If you're feeling really adventurous, find some x86 disassembler source code - e.g., by ripping it out of QEMU, or out of GNU binutils, or just write it yourself - and extend the JOS kernel monitor to be able to disassemble and display instructions as you are stepping through them. Combined with the symbol table loading from lab 2, this is the stuff of which real kernel debuggers are made.
 
-实现了`mon_showmappings`、`mon_setperm`、`mon_dump`、`mon_shutdown`几个函数。前面3个函数有大量的处理格式化和边界的代码，并且针对了`4MB`页进行了处理，代码比较长，因此这里只写一下其中关键的功能部分。
+`EFLAGS`的每一位具体含义在`inc/mmu.h`中定义，其中`FL_TF`为单步中断的标记。
 
-**`mon_showmappings`**：使用`showmappings start_addr [end_addr]`，输出在`start_addr`和`end_addr`之间开始的页的映射。如果只输入`start_addr`，则输出`start_addr`之后第一个页的映射。
+开启单步：
 
-```
-for (i = va1; va1 <= i && i <= va2; i = pttop) {
-   if (over || flushscreen(count, 20, 1))
-      break;
-   pttop = ROUNDUP(i+1, PTSIZE);
-   pdep = &kern_pgdir[PDX(i)];
-   if (pdep && (*pdep & PTE_P)) {
-      if (!(*pdep & PTE_PS)) {
-         // 4-KByte
-         for (i; i < pttop; i += PGSIZE) {
-            if ((over = (flushscreen(count, 20, 1) == 1 || 
-               i > va2 || i < va1)))
-               break;
-            ptep = pgdir_walk(kern_pgdir, (const void *)i, 0);
-            if (ptep &&(*ptep & PTE_P))
-               printmap(ptep, i, PGSIZE);
-            else // pte unmapped
-               printmap(ptep, i, -PGSIZE);   
-            count++;
-         }
-      } else {
-         // 4-MByte
-         printmap(pdep, ROUNDDOWN(i, PTSIZE), PTSIZE);
-         count++;
-      }
-   } else {
-      // pde unmapped
-      printmap(pdep, i, -PTSIZE);
-      count++;
-   }
-}
-```
-外层循环与页表为单位执行，内层循环以页为单位执行。其中`flushscreen`在输出过多时使用，每20行提示一次是否要停止输出；`printmap`负责格式化输出每一行的结果。
-
-![test](http://ww3.sinaimg.cn/large/6313a6d8jw1eqaus5ni0rj21100n27ia.jpg)
-
-测试输入：`showmappings 0xef000000 0xffff0000`，从kernel stack顶部几个页到`KERNBASE`底部几个页的映射情况，可以看出输出结果正常：`KERNBASE`之下前8块页为`CPU0' kernel stack`的内容，在此之前为`Invalid Memory`，因此映射显示为`no mapping`；`KERNBASE`之上为`4MB`的页，因此以`4-MByte`为单位进行显示。
-
-**`mon_setperm`**：使用`setperm addr [+|-]perm`，`perm`可为`P`、`U`、`W`其中之一或组合，大小写无关。在终端会先后输出对`addr`**所在的页**修改权限前的状态和修改后的结果。
-
-```
-pdep = &kern_pgdir[PDX(addr)];
-if (pdep) { // no need to judge whether PTE_P stands
-   if (*pdep & PTE_PS) {
-      // 4-MByte
-      addr = ROUNDDOWN(addr, PTSIZE);
-      printmap(pdep, addr, PTSIZE);
-      setperm(pdep, perms);
-      cprintf(" ---->\n");
-      printmap(pdep, addr, PTSIZE);
-   } else {
-      // 4-KByte
-      ptep = pgdir_walk(kern_pgdir, (const void *) addr, 0);
-      if (ptep) {
-         printmap(ptep, addr, PGSIZE);
-         setperm(ptep, perms);
-         cprintf(" ---->\n");
-         printmap(ptep, addr, PGSIZE);
-      } else
-         printmap(ptep, addr, -PGSIZE);
-   }
-} else {
-   // pde unmapped
-   addr = ROUNDDOWN(addr, PTSIZE);
-   printmap(pdep, addr, -PTSIZE);
-}
-```
-`perms`数组的内容由输入而定，`perm`串以`+`开头或直接以`P`、`U`、`W`开头的情况为1，以`-`开头则为`-1`，除此之外的情况为`0`。权限设置的功能由`setperm`实现：
-
-```
-void
-setperm(pte_t *ptep, int perms[])
-{
-   if (perms[0] == 1)
-      *ptep |= PTE_P;
-   else if (perms[0] == -1)
-      *ptep &= ~PTE_P;
-   if (perms[1] == 1)
-      *ptep |= PTE_U;
-   else if (perms[1] == -1)
-      *ptep &= ~PTE_U;
-   if (perms[2] == 1)
-      *ptep |= PTE_W;
-   else if (perms[2] == -1)
-      *ptep &= ~PTE_W;
-}
-```
-
-测试权限增减：
-
-![test setperm](http://ww2.sinaimg.cn/large/6313a6d8jw1eqavggcaxkj213g08owi7.jpg)
-
-测试`4MB`页权限设置：
-
-![test setperm 4mb](http://ww2.sinaimg.cn/large/6313a6d8jw1eqavcuynw4j211o04s40a.jpg)
-
-结果正确。
-
-**`mon_dump`**：使用`dump start_addr len`，输出两个地址之间的内容，模仿gdb的格式，4字节为单位。若没有物理地址映射到对应虚拟地址范围，则输出`pgunmapped`。
-
-```
-for (i = 0; va1 < va2; va1 = (uintptr_t)((uint32_t *)va1 + 1), i++){
-   if (flushscreen(i, 23*4, 0))
-      break;
-   if (!(i % 4))
-      cprintf("0x%08x:", va1);
-
-   if (checkmapping(va1))
-      cprintf("\t0x%08x", *(uint32_t *)va1);
-   else
-      cprintf("\tpgunmapped");
-
-   if (i % 4 == 3)
-      cprintf("\n");
-}
-```
-
-测试：与`gdb`结果对比
-
-`gdb`：
-
-![gdb](http://ww4.sinaimg.cn/large/6313a6d8jw1eqaymkfcpyj20yc0mgk4i.jpg)
-
-`mon_dump`：
-
-![mon_dump](http://ww3.sinaimg.cn/large/6313a6d8gw1eqbaq0lra2j20su0iqajt.jpg)
-
-结果完全一致。
-
-**`mon_shutdown`**：使用`shutdown`，关闭`JOS`和`qemu`。由于调试过程中经常需要关掉`qemu`重新编译再运行，而关掉`qemu`这个过程操作次数太多(`Ctrl+a c`-->`quit <Enter>`)，而且在`qemu`本身的窗口中按`Ctrl+a c`并无法召出`qemu`控制台，所以就想要写这么一个接口。参考了Github上[chaOS](https://github.com/Kijewski/chaOS/)的代码，具体实现：
-
-```
+```c
 int
-mon_shutdown(int argc, char **argv, struct Trapframe *tf)
+jdb_si(int argc, char **argv, struct Trapframe *tf) {
+   if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+      return -1;
+
+   tf->tf_eflags |= FL_TF;
+
+   return -1;
+}
+```
+
+关闭单步：
+
+```c
+int jdb_con(int argc, char **argv, struct Trapframe *tf) {
+   if (tf == NULL || !(tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG))
+      return -1;
+
+   tf->tf_eflags &= ~FL_TF;
+   return -1;
+}
+```
+
+把这两个函数加入`monitor.c`即可完成single-stepping和continue。
+
+后来想要模仿一下gdb，就专门加了一个指令jdb：
+
+```c
+static struct Command commands[] = {
+   ...
+   { "jdb", "Run JOS debugger", mon_jdb },
+};
+```
+
+```c
+int
+mon_jdb(int argc, char **argv, struct Trapframe *tf) {
+   monitor_jdb(tf);
+   return -1;
+}
+```
+
+其中`monitor_jdb`是我重新写的一个monitor，会输出当前地址，并调用我重写的`runcmd_jdb`来处理指令：
+
+```c
+void
+monitor_jdb(struct Trapframe *tf)
 {
-   const char *s = "Shutdown";
+   char *buf;
 
-   __asm __volatile ("cli");
-   
-   for (;;) {
-      // (phony) ACPI shutdown (http://forum.osdev.org/viewtopic.php?t=16990)
-      // Works for qemu and bochs.
-      outw (0xB004, 0x2000);
+   if (tf) 
+      cprintf("=> 0x%08x\n", tf->tf_eip);
 
-      // Magic shutdown code for bochs and qemu.
-      while(*s) {
-         outb (0x8900, *s);
-         ++s;
-      }
-
-      // Magic code for VMWare. Also a hard lock.
-      __asm __volatile ("cli; hlt");
+   while (1) {
+      buf = readline("(jdb) ");
+      if (buf != NULL)
+         if (runcmd_jdb(buf, tf) < 0)
+            break;
    }
 }
+```
+
+```c
+static int
+runcmd_jdb(char *buf, struct Trapframe *tf)
+{
+   int argc;
+   char *argv[MAXARGS];
+   int i;
+
+   // Parse the command buffer into whitespace-separated arguments
+   argc = 0;
+   argv[argc] = 0;
+   while (1) {
+      // gobble whitespace
+      while (*buf && strchr(WHITESPACE, *buf))
+         *buf++ = 0;
+      if (*buf == 0)
+         break;
+
+      // save and scan past next arg
+      if (argc == MAXARGS-1) {
+         cprintf("Too many arguments (max %d)\n", MAXARGS);
+         return 0;
+      }
+      argv[argc++] = buf;
+      while (*buf && !strchr(WHITESPACE, *buf))
+         buf++;
+   }
+   argv[argc] = 0;
+
+   // Lookup and invoke the command
+   if (argc == 0)
+      return 0;
+   for (i = 0; i < NCOMMANDS_DEBUG; i++) {
+      if (strcmp(argv[0], commands_debug[i].name) == 0)
+         return commands_debug[i].func(argc, argv, tf);
+   }
+   cprintf("Unknown command '%s'\n", argv[0]);
+   return 0;
+}
+```
+
+`commands_debug`里存放的就是刚才写的那两个single-stepping和continue的函数：
+
+```c
+static struct Command commands_debug[] = {
+   { "help", "Display this list of commands", jdb_help },
+   { "si", "Single Step", jdb_si },
+   { "c", "Continue execution", jdb_con },
+   { "quit", "Exit debugger", jdb_quit },
+};
+```
+
+**测试**：执行`user/breakpoint`后单步2次，再continue
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1er5at1tu9tj20vc0mkq9a.jpg =600x)
+
+#### Question 3
+
+>The break point test case will either generate a break point exception or a general protection fault depending on how you initialized the break point entry in the `IDT` (i.e., your call to `SETGATE` from `trap_init`). Why? How do you need to set it up in order to get the breakpoint exception to work as specified above and what incorrect setup would cause it to trigger a general protection fault?
+
+在`trap_init()`中调用`SETGATE`时将breakpoint异常特权级设置为`dpl=3`即可；未设置时用户态直接触发breakpoint会引发general protection fault。
+
+#### Question 4
+
+>What do you think is the point of these mechanisms, particularly in light of what the `user/softint` test program does?
+
+这种机制一是可以将用户(可)触发的中断与只有内核可以触发的中断区分开来，对于只有可以允许触发的中断可以以比较容易的方式直接进行操作，而不用再在里面检查权限；二是可以避免用户用某些方式破坏kernel或者窃取其他进程的私有数据。
+
+#### Exercise 7
+
+>Add a handler in the kernel for interrupt vector `T_SYSCALL`. You will have to edit `kern/trapentry.S` and `kern/trap.c`'s `trap_init()`. You also need to change `trap_dispatch()` to handle the system call interrupt by calling `syscall()` (defined in `kern/syscall.c`) with the appropriate arguments, and then arranging for the return value to be passed back to the user process in `%eax`. Finally, you need to implement `syscall()` in `kern/syscall.c`. Make sure `syscall()` returns `-E_INVAL` if the system call number is invalid. You should read and understand `lib/syscall.c` (especially the inline assembly routine) in order to confirm your understanding of the system call interface. Handle all the systems calls listed in `inc/syscall.h` by invoking the corresponding kernel function for each call.
+
+阅读了这几个文件的代码，总结一下`syscall`在JOS代码中的流程：
+
+>1. 用户进程调用`lib/syscall.c`中定义的几个函数之一(`sys_cputs`, `sys_cgetc`, `sys_env_destroy`, `sys_getenvid`)
+
+>2. 调用`lib/syscall.c`中的`syscall`函数，传入系统调用码和其他参数
+
+>3. `lib/syscall.c`的`syscall`中根据传入参数执行`int %1`汇编代码，触发系统调用中断
+
+>4. 经过中间特权级变换、栈切换、保护现场等一系列过程，陷入内核态
+
+>5. 根据`trap_init()`中初始化设置好的IDT项，找到对应handler入口地址
+
+>6. handler中建好Trapframe后调用`trap()`
+
+>7. `trap()`经过一些检查后调用`trap_dispatch()`
+
+>8. `trap_dispatch()`发现现在发生的是系统调用中断，调用`kern/syscall.c`中的`syscall`函数来进行处理
+
+>9. 回到`trap()`，调用`env_run()`=>`env_pop_tf()`返回用户态
+
+清楚了过程，下面来进行具体实现。
+
+先在`kern/trapentry.S`和`kern/trap.c trap_init()`中添加相关代码：
+
+`kern/trapentry.S`:
+
+```asm
+.data
+   .space 112 # (47-19)*4
+.text
+   TRAPHANDLER_NOEC(handler48, T_SYSCALL);
+```
+其中`.data`部分是为了让syscall刚好在handler数组的第48位而设的padding
+
+`trap_init()`初始化的循环后添加一行:
+
+```c
+SETGATE(idt[T_SYSCALL], 0, GD_KT, handler[T_SYSCALL], 3);
+```
+
+然后把比较简单的`kern/syscall.c`中的`syscall`实现：
+
+```c
+// Dispatches to the correct kernel function, passing the arguments.
+int32_t
+syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+   // Call the function corresponding to the 'syscallno' parameter.
+   // Return any appropriate return value.
+   // LAB 3: Your code here.
+
+   switch (syscallno) {
+   case SYS_cputs:
+      sys_cputs((const char *)a1, (size_t)a2);
+      return 0;
+   case SYS_cgetc:
+      return sys_cgetc();
+   case SYS_getenvid:
+      return (int32_t) sys_getenvid();
+   case SYS_env_destroy:
+      return sys_env_destroy(a1);
+   default:
+      return -E_NO_SYS;
+   }
+
+   panic("syscall not implemented");
+}
+```
+
+之后在`trap_dispatch`中添加系统调用的相关代码：
 
 ```
+if (tf->tf_trapno == T_SYSCALL) {
+   
+   tf->tf_regs.reg_eax = 
+      syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
+         tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+   
+   if (tf->tf_regs.reg_eax < 0) {
+      panic("trap_dispatch: %e", tf->tf_regs.reg_eax);
+   }
+
+   return;
+}
+```
+
 
 #### Challenge 3
 
->Write up an outline of how a kernel could be designed to allow user environments unrestricted use of the full 4GB virtual and linear address space. Hint: the technique is sometimes known as "follow the bouncing kernel." In your design, be sure to address exactly what has to happen when the processor transitions between kernel and user modes, and how the kernel would accomplish such transitions. Also describe how the kernel would access physical memory and I/O devices in this scheme, and how the kernel would access a user environment's virtual address space during system calls and the like. Finally, think about and describe the advantages and disadvantages of such a scheme in terms of flexibility, performance, kernel complexity, and other factors you can think of.
+>Implement system calls using the `sysenter` and `sysexit` instructions instead of using `int 0x30` and `iret`.
 
-网上能搜到的资料全是Lab的题目`_(:з」∠)_`。参考了Github上一个叫[`jos-mmap`](https://github.com/cmjones/jos-mmap/blob/master/answers-lab2.txt)的项目中的描述，结合自己的理解，应该只要在用户访问虚存中原本无权限的页（比如保存了`IDT`和`BIOS`的物理页`0`、页表结构，还有一些其他预留的页）时，将对应的物理页映射到虚存中另一个位置，再重新为用户分配该页(这个过程只改变映射关系，不改变物理内存中的内容)。这样用户就能使用整个4G的虚存空间了。
+>下略
 
-**用户态和内核态的转换**
+感觉这个Challenge太复杂了，时间上有点来不及了所以没有进行尝试。
 
-用户态-->内核态过程中，需要`IDT`以定位中断处理例程。要找到`IDT`需要将其从物理内存中映射到虚存空间中某一个固定的位置(比如`0xF0000000`)。此时只需先备份`0xF0000000`之前的页表项，再将`IDT`映射过去即可。后面就跟普通的中断处理过程一样了。
+#### Exercise 8
 
-内核态-->用户态：恢复现场，改写PSW转回用户态，然后恢复用户空间的备份的页表项。
+>Add the required code to the user library, then boot your kernel. You should see `user/hello` print "hello, world" and then print "i am environment `00001000`". `user/hello` then attempts to "exit" by calling `sys_env_destroy()` (see `lib/libmain.c` and `lib/exit.c`). Since the kernel currently only supports one user environment, it should report that it has destroyed the only environment and then drop into the kernel monitor. You should be able to get make grade to succeed on the hello test.
 
-**优缺点**
+在`lib/libmain.c libmain()`中将
+```c
+thisenv = 0
+```
 
-**优点**：用户能用整个4G虚存空间。
+改为
 
-**缺点**：这种每次发生权限错误都会重新进行页表的映射，Overhead非常大。
+```c
+thisenv = &envs[ENVX(sys_getenvid())];
+```
 
+即可。其中sys_getenvid()会活动当前env的envid，ENVX会根据envid计算当前env在envs数组中的编号。
 
-#### Challenge 4
+#### Exercise 9
 
->Since our JOS kernel's memory management system only allocates and frees memory on page granularity, we do not have anything comparable to a general-purpose malloc/free facility that we can use within the kernel. This could be a problem if we want to support certain types of I/O devices that require physically contiguous buffers larger than `4KB` in size, or if we want user-level environments, and not just the kernel, to be able to allocate and map `4MB` superpages for maximum processor efficiency. (See the earlier challenge problem about `PTE_PS`.)
-Generalize the kernel's memory allocation system to support pages of a variety of power-of-two allocation unit sizes from `4KB` up to some reasonable maximum of your choice. Be sure you have some way to divide larger allocation units into smaller ones on demand, and to coalesce multiple small allocation units back into larger units when possible. Think about the issues that might arise in such a system.
+>Change `kern/trap.c` to panic if a page fault happens in kernel mode.
 
-这个Challenge的要求就是实现一个类似伙伴系统的算法，思路如下：
+```c
+if (tf->tf_cs == GD_KT) {
+   // Trapped from kernel mode
+   panic("page_fault_handler: page fault in kernel mode");
+}
+```
 
-1. 为4KB~4MB的页面以2为公比，分别维护各自的`page_free_list[i]`，其中$i = \log_2(Pagesize/4KB)$
+>Read `user_mem_assert` in `kern/pmap.c` and implement `user_mem_check` in that same file.
 
-2. 初始化时（遍历原先的`page_free_list`）将每`1024`块相邻的`page`作为一个`4MB`的free page插入相应的`page_free_list`。
+这个问题需要一点特殊处理。最开始错了几次，最后看到qemu输出的信息后发现在[va, va+len)范围中，第一个页是从va开始判断，如果这个页错了就返回va的地址，但是后面的页都是按页对齐的。
 
-3. 当分配一个大小为`s`的空间时，
-   - 若`page_free_list[u]`($2^{u-1}<s\leq2^u$)不为空，则分配`page_free_list[u]`中的一块空间；
-   - 否则检查`page_free_list[u+1]`是否为空，不为空则进入下一步，为空则迭代进行，直到找到不为空的free list；若不存在这样的free list，则返回错误；
-   - 从找到的`page_free_list[k]`中取出一个块，将其均分后放入`page_free_list[k-1]`，然后对`page_free_list[k-1]`进行同样的操作，直到`k == u`为止；
-   - 此时`page_free_list[u]`不为空，从中分配一个块给`s`即可。
+```c
+int
+user_mem_check(struct Env *env, const void *va, size_t len, int perm)
+{
+   // LAB 3: Your code here.
+   void *cur = (void *)(uintptr_t)va;
+   void *top = ((void *)(uintptr_t)cur) + len;
+   pte_t *ptep;
 
-4. 当释放一个块的空间时，
-   - 将其插回对应的`page_free_list[u]`；
-   - 遍历一遍`page_free_list[u]`链表，看有没有与其空间连续的块，若有，则从`page_free_list[u]`中删除这两个块，将它们合并并插入`page_free_list[u+1]`；
-   - 若有$2^u == 4MB$，则不进行合并。
+   perm |= PTE_P;
 
-具体实现要大量改动lab的代码，而且在`ICS`也做过类似的东西了，当时调试的绝望依然难以忘怀`_(:з」∠)_`，就不实现到代码了。
+   for (; cur < top; cur = ROUNDDOWN(cur+PGSIZE, PGSIZE)) {
+      if ((uint32_t) cur > ULIM) {
+         user_mem_check_addr = (uintptr_t) cur;
+         return -E_FAULT;
+      }
+      page_lookup(env->env_pgdir, cur, &ptep);
+      if (!(ptep && ((*ptep & perm) == perm))) {
+         user_mem_check_addr = (uintptr_t) cur;
+         return -E_FAULT;
+      }
+   }
+
+   return 0;
+}
+```
+
+>Change `kern/syscall.c` to sanity check arguments to system calls.
+
+`kern/syscall.c`只有`sys_cputs`函数会去访问内存空间，所以在这个函数里调用`user_mem_assert`检查权限即可：
+
+```c
+static void
+sys_cputs(const char *s, size_t len)
+{
+   // Check that the user has permission to read memory [s, s+len).
+   // Destroy the environment if not.
+
+   // LAB 3: Your code here.
+   user_mem_assert(curenv, s, len, PTE_U | PTE_W);
+   
+   // Print the string supplied by the user.
+   cprintf("%.*s", len, s);
+}
+
+```
+
+>Boot your kernel, running `user/buggyhello`. The environment should be destroyed, and the kernel should not panic. You should see:
+>
+   [00001000] user_mem_check assertion failure for va 00000001
+   [00001000] free env 00001000
+   Destroyed the only environment - nothing more to do!
+
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1er5gk3g6grj20xu0o8tj4.jpg =600x)
+
+so far so good~
+
+>Finally, change `debuginfo_eip` in `kern/kdebug.c` to call `user_mem_check` on `usd`, `stabs`, and `stabstr`. 
+
+在`debuginfo_eip`里使用`usd`、`stabs`、`stabstr`三个指针前检查其访问空间的权限即可：
+
+**`usd`**:
+
+```c
+if (user_mem_check(curenv, usd, sizeof(struct UserStabData), PTE_U) < 0) {
+   cprintf("debuginfo_eip: invalid usd addr %08x", usd);
+   return -1;
+}
+```
+
+**`stabs` & `stabstr`**:
+
+```c
+if (user_mem_check(curenv, stabs, stab_end-stabs+1, PTE_U) < 0){
+   cprintf("debuginfo_eip: invalid stabs addr %08x", stabs);
+   return -1;
+}
+if (user_mem_check(curenv, stabstr, stabstr_end-stabstr+1, PTE_U) < 0) {
+   cprintf("debuginfo_eip: invalid stabstr addr %08x", stabstr);
+   return -1;
+}
+```
+
+>If you now run `user/breakpoint`, you should be able to run backtrace from the kernel monitor and see the backtrace traverse into `lib/libmain.c` before the kernel panics with a page fault. What causes this page fault? You don't need to fix it, but you should understand why it happens.
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1er5gqradj0j214k0t0tlu.jpg =600x)
+
+这样看不太出来是什么引起的这个错误，所以我改写了一下backtrace函数
+
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1er5hbo2zerj20xy0oa47u.jpg =600x)
+
+可以看出是在`(uintptr_t *)ebp + 4`，即`0xeebfe000`处发生了Page Fault，对照`inc/memlayout.h`发现这个地址刚好超过了`USTACKTOP`，所以发生了错误。
+
+#### Exercise 10
+
+>Boot your kernel, running `user/evilhello`. The environment should be destroyed, and the kernel should not panic. You should see:
+>
+   [00000000] new env 00001000
+   [00001000] user_mem_check assertion failure for va f010000c
+   [00001000] free env 00001000
+   
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1er5hjudusej20xu0oaqe2.jpg =600x)
+
+至此Lab 3完成。
 
 ## 遇到的困难以及解决方法
 
-可能是由于之前对于内存管理这块的学习不够扎实，拿到lab开始纠结了很久不知道怎么下手。一开始甚至卡了壳儿一下没理解什么叫`alloc`一块空间。不过冷静下来好好整理了一下之前学过的东西，也就能够起手了。再加上lab中大量的注释，让代码编写的整体思路变得很清晰。只要按着注释来做，几个`check`的函数都能过。
-
-剩下的问题就是不时会遇到的`triple fault`，先用`make qemu-gdb`，再运行`gdb`，在`gdb`中进行调试，很快就能锁定出错的位置，然后加以解决了。
+遇到的困难主要在于Part A的Challenge 1，刚拿到题的以为直接在`.text`段前面声明一个数组就行了，结果一直`triple fault`，最后在吕鑫同学的指导下才指导需要为每个handler都声明一个`.data`和函数名称对应的`name`才能被前面声明数组当成其中的一个元素。
 
 ## 收获及感想
 
-这次的lab“强迫”我把之前关于内存管理没有搞透彻的地方弄明白了，从前一次lab中设置的线性映射，到此次lab中完整的页表机制，以及在课上对诸如“自映射”之类问题的讨论，让我对物理页管理、虚存初始化和管理这块有了比较系统、深入的理解。很多东西真的是要认真去思考过了，动手做过了才能明白的。
-
-在反复调试`4MB`页的设置，以及后一个Challenge中针对`4MB`页表的处理也让我经常需要去看`4KB`和`4MB`的虚拟地址结构、页目录项、页表项结构。这几个地方从之前ICS开始就是每次用上都得重新去查这次lab总算是把它们深深地印在我脑子里了。
+在之前的课程中虽然学习过中断，但那仅限于一个比较粗略的过程，在这次的lab中在自己阅读文档、代码并且动手编写之后才对中断的整个过程有了比较细节的了解。
 
 ## 参考文献
 
-[1] [Intel 80386 Reference Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/toc.htm)
-[2] [QEMU monitor commands](http://pdosnew.csail.mit.edu/6.828/2014/labguide.html#qemu) 
-[3] [Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume3A](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf)
-[4] [Kijewski/chaOS](https://github.com/Kijewski/chaOS/)
-[5] [ACPI poweroff](http://forum.osdev.org/viewtopic.php?t=16990)
-[6] [cmjones/jos-mmap](https://github.com/cmjones/jos-mmap/blob/master/answers-lab2.txt)
+\[1\] [Intel 80386 Reference Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/i386/toc.htm)
+\[2\] [QEMU monitor commands](http://pdosnew.csail.mit.edu/6.828/2014/labguide.html#qemu) 
+\[3\] [Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume3A](http://pdosnew.csail.mit.edu/6.828/2014/readings/ia32/IA32-3A.pdf), Chapter 5
+\[4\] 吴昱东，田堃，刘铭名. [JOS 异常处理流程](http://course.pku.edu.cn/courses/1/048-04830191-0006161023-1/db/_543158_1/x86_exception.html)
