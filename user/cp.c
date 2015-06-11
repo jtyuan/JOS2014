@@ -95,10 +95,15 @@ cp1(const char *src_path_, const char *dst_path_, bool isdir, const char *f_name
 	}
 
 	if (isdir) {
-		if ((r = spawnl("/mkdir", "mkdir", dst_path, (char*)0)) < 0)
-			return;
-		if (r >= 0)
-			wait(r);
+		// if ((r = spawnl("/mkdir", "mkdir", dst_path, (char*)0)) < 0)
+		// 	return;
+		// if (r >= 0)
+		// 	wait(r);
+		
+		if ((wfd = open(dst_path, O_MKDIR)) < 0)
+			cprintf("open %s: %e\n", dst_path, wfd);
+
+		close(wfd);
 	} else {
 		if (verbose)
 			cprintf("Copying from %s to %s\n", src_path, dst_path);

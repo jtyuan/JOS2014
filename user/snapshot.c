@@ -37,7 +37,7 @@ ssdir(const char *path, const char *dst)
 	struct File f;
 	char buf[256], buf_pre[256];
 
-	// cprintf("%s\n", path);
+	// cprintf("%s %s\n", path, dst);
 
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
