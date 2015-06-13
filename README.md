@@ -1,790 +1,725 @@
-# JOS Lab 5 Report<br/><small><small><small><small>江天源 1100016614</small></small></small></small>
+# JOS Lab 6 Report<br/><small><small><small><small>江天源 1100016614</small></small></small></small>
 
 ## 总体概述
 
 
 ### 完成情况
 
-|#|E1|E2|E3|E4|E5|E6|E7|E8|E9|E10|
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|Status|√|√|√|√|√|√|√|√|√|√|
+|#|E1|E2|E3|E4|E5|E6|E7|E8|E9|E10|E11|E12|E13|
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+|Status|√|√|√|√|√|√|√|√|√|√|√|√|√|
 
-|#|Q1|C1|C2|C3|C4|C5|C6|C7|
+|#|Q1|Q2|Q3|Q4|C1|C2|C3|C4|C5|
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-|Status|√|×|×|×|√|×|×|√|
+|Status|√|√|√|√|√|×|×|×|×|
 
 <small>* 其中E#代表Exercise #, Q#代表Question #, C# 代表Challenge #</small>
 
-共完成了2个Challenge。
+共完成了1个Challenge。
 
 `make grade`结果
 
-![](http://ww3.sinaimg.cn/large/6313a6d8jw1esj2vn3vzyj20wk0myah5.jpg =600x)
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1et2acl3pg0j20x00mm10k.jpg =600x)
 
-### Part A: User Environments and Exception Handling
+### Part A: Initialization and transmitting packets
 
 #### Exercise 1
 
->`i386_init` identifies the file system environment by passing the type `ENV_TYPE_FS` to your environment creation function, `env_create`. Modify `env_create` in `env.c`, so that it gives the file system environment I/O privilege, but never gives that privilege to any other environment.
+>Add a call to time_tick for every clock interrupt in kern/trap.c. Implement sys_time_msec and add it to syscall in kern/syscall.c so that user space has access to the time.
 
-在`env_create`最后添加代码，在创建的环境为file server的情况下，给予其I/O权限：
+在`kern/trap.c` `trap_dispatch`函数中，处理时钟中断处加上对`time_tick`的调用即可（根据注释，在多处理器的情况下，每个CPU都会触发时钟中断，因此需要加上判断，只在第一个CPU上进行计数）：
 
 ```java
-if (type == ENV_TYPE_FS)
-   e->env_tf.tf_eflags |= FL_IOPL_3;
+if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+   if (thiscpu->cpu_id == 0)
+      time_tick();
+   lapic_eoi();
+   sched_yield();
+   return;
+}
 ```
 
-#### Question
+`sys_time_msec`：获取`time_msec`的函数在`kern/time.c`中已经定义了，直接调用`time_msec`函数即可。（同样要在syscall添加对SYS_time_msec的处理）
 
-> Do you have to do anything else to ensure that this I/O privilege setting is saved and restored properly when you subsequently switch from one environment to another? Why?
-
-不需要，在environment的switching过程中，I/O privilege由硬件进行保存，并通过`env_pop_tf`的`iret`指令恢复。
+```java
+static int
+sys_time_msec(void)
+{
+   return time_msec();
+}
+```
 
 #### Exercise 2
 
->Implement the `bc_pgfault` and `flush_block` functions in `fs/bc.c`. `bc_pgfault` is a page fault handler, just like the one your wrote in the previous lab for copy-on-write fork, except that its job is to load pages in from the disk in response to a page fault. When writing this, keep in mind that (1) `addr` may not be aligned to a block boundary and (2) `ide_read` operates in sectors, not blocks.
+>Browse Intel's Software Developer's Manual for the E1000. This manual covers several closely related Ethernet controllers. QEMU emulates the 82540EM.
 
-`bc_pgfault`是block cache的一个page fault处理函数，它需要做的事情就是在基本的变量检查之后，在内存中分配一个页，并将磁盘中对应的文件读入其中；最后需要清dirty位，这一步用自身到自身的`sys_page_map`即可完成。
+>You should skim over chapter 2 now to get a feel for the device. To write your driver, you'll need to be familiar with chapters 3 and 14, as well as 4.1 (though not 4.1's subsections). You'll also need to use chapter 13 as reference. The other chapters mostly cover components of the E1000 that your driver won't have to interact with. Don't worry about the details right now; just get a feel for how the document is structured so you can find things later.
 
-```java
-static void
-bc_pgfault(struct UTrapframe *utf)
-{
-   void *addr = (void *) utf->utf_fault_va;
-   uint32_t blockno = ((uint32_t)addr - DISKMAP) / BLKSIZE;
-   int r;
+>While reading the manual, keep in mind that the E1000 is a sophisticated device with many advanced features. A working E1000 driver only needs a fraction of the features and interfaces that the NIC provides. Think carefully about the easiest way to interface with the card. We strongly recommend that you get a basic driver working before taking advantage of the advanced features.
 
-   // Check that the fault was within the block cache region
-   if (addr < (void*)DISKMAP || addr >= (void*)(DISKMAP + DISKSIZE))
-      panic("page fault in FS: eip %08x, va %08x, err %04x",
-            utf->utf_eip, addr, utf->utf_err);
-
-   // Sanity check the block number.
-   if (super && blockno >= super->s_nblocks)
-      panic("reading non-existent block %08x\n", blockno);
-
-   addr = ROUNDDOWN(addr, PGSIZE);
-   if ((r = sys_page_alloc(0, addr, PTE_P | PTE_U | PTE_W)) < 0)
-      panic("in bc_pgfault, sys_page_alloc: %e", r);
-
-   if ((r = ide_read(blockno*BLKSECTS, addr, BLKSECTS)) < 0)
-      panic("in bc_pgfault, ide_read: %e", r);
-
-   // Clear the dirty bit for the disk block page since we just read the
-   // block from disk
-   if ((r = sys_page_map(0, addr, 0, addr, 
-      uvpt[PGNUM(addr)] & PTE_SYSCALL)) < 0)
-      panic("in bc_pgfault, sys_page_map: %e", r);
-
-   // Check that the block we read was allocated. (exercise for
-   // the reader: why do we do this *after* reading the block
-   // in?)
-   if (bitmap && block_is_free(blockno))
-      panic("reading free block %08x\n", blockno);
-}
-```
-
-将内存中`addr`所在的一个标记了dirty的block写回硬盘；进行完基本的检查和dirty位的检查后，调用`ide_write`将内容写回硬盘，最后再利用`sys_page_map`清掉dirty位即可。
-
-```java
-void
-flush_block(void *addr)
-{
-   uint32_t blockno = ((uint32_t)addr - DISKMAP) / BLKSIZE;
-   int r;
-
-   if (addr < (void*)DISKMAP || addr >= (void*)(DISKMAP + DISKSIZE))
-      panic("flush_block of bad va %08x", addr);
-
-   // LAB 5: Your code here.
-   if (!(va_is_mapped(addr) && va_is_dirty(addr)))
-      return;
-
-   addr = ROUNDDOWN(addr, PGSIZE);
-
-   if ((r = ide_write(blockno*BLKSECTS, addr, BLKSECTS)) < 0)
-      panic("in flush_block, ide_write: %e", r);
-
-   if ((r = sys_page_map(0, addr, 0, addr, 
-      uvpt[PGNUM(addr)] & PTE_SYSCALL)) < 0)
-      panic("in flush_block, sys_page_map: %e", r);
-   // panic("flush_block not implemented");
-}
-```
+浏览了一遍，对内容的位置有大概印象，具体还是得实现的时候查阅。
 
 
 #### Exercise 3
 
->Use `free_block` as a model to implement `alloc_block`, which should find a free disk block in the bitmap, mark it used, and return the number of that block. When you allocate a block, you should immediately flush the changed bitmap block to disk with `flush_block`, to help file system consistency.
+>Implement an attach function to initialize the E1000. Add an entry to the pci_attach_vendor array in kern/pci.c to trigger your function if a matching PCI device is found (be sure to put it before the {0, 0, 0} entry that mark the end of the table). You can find the vendor ID and device ID of the 82540EM that QEMU emulates in section 5.2. You should also see these listed when JOS scans the PCI bus while booting.
 
-参考`free_block`中的语句`bitmap[blockno/32] |= 1<<(blockno%32);`，可以知道
+>For now, just enable the E1000 device via pci_func_enable. We'll add more initialization throughout the lab.
 
->1. bitmap中`0`表示正在使用，`1`表示空闲
-2. 只需将对应的bitmap位并一个只有某一位为0的mask即可表示某一位被分配
+>We have provided the kern/e1000.c and kern/e1000.h files for you so that you do not need to mess with the build system. They are currently blank; you need to fill them in for this exercise. You may also need to include the e1000.h file in other places in the kernel.
 
-剩下的实现都水到渠成了：
+>When you boot your kernel, you should see it print that the PCI function of the E1000 card was enabled. Your code should now pass the pci attach test of make grade.
+
+在`kern/e1000.h`中添加：
+
+```
+#include <kern/pci.h>
+
+#define E1000_VENDORID 0x8086
+#define E1000_DEVICEID 0x100e
+
+int e1000_attach(struct pci_func *pcif);
+```
+
+`kern/e1000.c`实现`e1000_attach`，现在只需调用`pci_func_enable`函数：
 
 ```java
 int
-alloc_block(void)
+e1000_attach(struct pci_func *pcif)
 {
-   int i;
-
-   for (i = 0; i < super->s_nblocks; i++) {
-      if (block_is_free(i)) {
-         // mark the blockno == i in-use
-         bitmap[i / 32] &= ~(1 << ( i %32));
-         flush_block(diskaddr(i / BLKBITSIZE + 2));
-         return i;
-      }
-   }
-
-   // panic("alloc_block not implemented");
-   return -E_NO_DISK;
+   pci_func_enable(pcif);
 }
 ```
 
-其中值得注意的是，bitmap前还有两个块作为`boot sector`和`super block`，所以将改变了的bitmap block写回硬盘时，需要`+2`。
+
+在`kern/pci.c`中的`pci_attach_vendor`中`{0, 0, 0}`前添加相关内容：
+
+```java
+// pci_attach_vendor matches the vendor ID and device ID of a PCI device
+struct pci_driver pci_attach_vendor[] = {
+   {E1000_VENDORID, E1000_DEVICEID, &e1000_attach},
+   { 0, 0, 0 },
+};
+```
+
 
 #### Exercise 4
 
->Implement `file_block_walk` and `file_get_block`. `file_block_walk` maps from a block offset within a file to the pointer for that block in the struct File or the indirect block, very much like what `pgdir_walk` did for page tables. `file_get_block` goes one step further and maps to the actual disk block, allocating a new one if necessary.
+> In your attach function, create a virtual memory mapping for the E1000's BAR 0 by calling mmio_map_region (which you wrote in lab 4 to support memory-mapping the LAPIC).
 
-`file_block_walk`：找到`filebno`对应的文件块编号，并保存在`ppdiskbno`中；分`Direct`和`Indirect`两种情形，前者直接在File结构的直接索引数组中找到对应的结果返回即可。后者在文件尚无间接索引的情况下，根据`alloc`参数的情况决定是否为间接索引新分配空间；在间接索引存在(或者新分配)的情况下，将对应块编号放到`ppdiskbno`中即可。
+>You'll want to record the location of this mapping in a variable so you can later access the registers you just mapped. Take a look at the lapic variable in kern/lapic.c for an example of one way to do this. If you do use a pointer to the device register mapping, be sure to declare it volatile; otherwise, the compiler is allowed to cache values and reorder accesses to this memory.
 
-```java
-static int
-file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
-{
-   uint32_t blockno;
+>To test your mapping, try printing out the device status register (section 13.4.2). This is a 4 byte register that starts at byte 8 of the register space. You should get 0x80080783, which indicates a full duplex link is up at 1000 MB/s, among other things.
 
-   if (filebno < NDIRECT)
-      *ppdiskbno = &f->f_direct[filebno];
-   else if (filebno < NDIRECT + NINDIRECT) {
-      if (!f->f_indirect) {
-         if (alloc) {
-            if ((blockno = alloc_block()) < 0)
-               return -E_NO_DISK;
-            memset(diskaddr(blockno), 0, BLKSIZE);
-            f->f_indirect = blockno;
-         } else
-            return -E_NOT_FOUND;
-      }
-      *ppdiskbno = &((uintptr_t *) 
-                  diskaddr(f->f_indirect))[filebno - NDIRECT];
-   } else {
-      return -E_INVAL;
-   }
+`kern/e1000.h`添加
 
-   return 0;
-}
+```
+#include <kern/pmap.h>
+
+volatile uint32_t *e1000; 
+
+#define E1000_STATUS   (0x00008>>2)  // Device Status - RO
 ```
 
-`file_get_block`：找到对应的文件块地址。先利用刚才实现的`file_block_walk`能找到对应的块编号，如果那块还没有分配空间，则进行分配；最后利用`diskaddr`找到块的地址，并保存在`blk`中即可。
+根据lab6的介绍，manual里设计的这些位置数值代表的是Byte偏移，因此在进行数组或者指针运算时需要除以类型的大小（这里是4）。
 
-```java
-int
-file_get_block(struct File *f, uint32_t filebno, char **blk)
-{
-       // LAB 5: Your code here.
-       // panic("file_get_block not implemented");
-   int r;
-   uint32_t *pdiskbno;
-   uint32_t blkno;
+`kern/e1000.c`中添加
 
-   if ((r = file_block_walk(f, filebno, &pdiskbno, true)) < 0)
-      return r;
-
-   if (!*pdiskbno) {
-      if ((blkno = alloc_block()) < 0)
-         return -E_NO_DISK;
-      *pdiskbno = blkno;
-   }
-
-   *blk = diskaddr(*pdiskbno);
-
-   return 0;
-}
 ```
+e1000 = (uint32_t *) mmio_map_region(pcif->reg_base[0], pcif->reg_size[0]);
+cprintf("E1000 status: 0x%08x\n", e1000[E1000_STATUS]);
+```
+
+测试：
+
+`make INIT_CFLAGS=-DTEST_NO_NS qemu`输出结果
+
+```
+E1000 status: 0x80080783
+```
+
+正确。
 
 #### Exercise 5
 
->Implement `serve_read` in `fs/serv.c`.
+>Perform the initialization steps described in section 14.5 (but not its subsections). Use section 13 as a reference for the registers the initialization process refers to and sections 3.3.3 and 3.4 for reference to the transmit descriptors and transmit descriptor array.
 
-![](http://ww1.sinaimg.cn/large/6313a6d8jw1esj66aimtij20qc0gy0uh.jpg =480x)
+>Be mindful of the alignment requirements on the transmit descriptor array and the restrictions on length of this array. Since TDLEN must be 128-byte aligned and each transmit descriptor is 16 bytes, your transmit descriptor array will need some multiple of 8 transmit descriptors. However, don't use more than 64 descriptors or our tests won't be able to test transmit ring overflow.
 
-上图是以读操作(`read`)为例的一般进程进行文件操作的执行过程。用户程序调用`read`函数，其中会调用对应设备的`devfile_read`函数来进行处理(`(*dev->dev_read)(fd, buf, n)`)。其中一般会调用一个叫`fsipc`的函数，跟系统的`file server`进行通信。`file server`会一直执行`serve`函数对设备的I/O请求进行轮询，当它发现有I/O请求时，会调用`serve_read`函数进行处理，并在其中调用文件系统自己的文件操作函数`file_read`来对磁盘文件进行操作。
+>For the TCTL.COLD, you can assume full-duplex operation. For TIPG, refer to the default values described in table 13-77 of section 13.4.34 for the IEEE 802.3 standard IPG (don't use the values in the table in section 14.5).
 
-`serve_read`的主要工作就是从`ipc`请求中获取到需要读的文件，并调用`file_read`将文件的内容读出并返回给`serve`，`serve`会则将结果返回给用户进程。
+先看看Developer's Manual的14.5节怎么说：
 
-实现如下：
+>Allocate a region of memory for the transmit descriptor list. Software should insure this memory is aligned on a paragraph (16-byte) boundary. Program the Transmit Descriptor Base Address (TDBAL/TDBAH) register(s) with the address of the region. TDBAL is used for 32-bit addresses and both TDBAL and TDBAH are used for 64-bit addresses.
 
-```java
-int
-serve_read(envid_t envid, union Fsipc *ipc)
+>Set the Transmit Descriptor Length (TDLEN) register to the size (in bytes) of the descriptor ring.
+This register must be 128-byte aligned.
+
+>The Transmit Descriptor Head and Tail (TDH/TDT) registers are initialized (by hardware) to 0b after a power-on or a software initiated Ethernet controller reset. Software should write 0b to both these registers to ensure this.
+
+>Initialize the Transmit Control Register (TCTL) for desired operation to include the following:
+
+>
+- Set the Enable (TCTL.EN) bit to 1b for normal operation.
+- Set the Pad Short Packets (TCTL.PSP) bit to 1b.
+- Configure the Collision Threshold (TCTL.CT) to the desired value. Ethernet standard is 10h.
+This setting only has meaning in half duplex mode.
+- Configure the Collision Distance (TCTL.COLD) to its expected value. For full duplex
+operation, this value should be set to 40h. For gigabit half duplex, this value should be set to
+200h. For 10/100 half duplex, this value should be set to 40h.
+
+>Program the Transmit IPG (TIPG) register with the following decimal values to get the minimum
+legal Inter Packet Gap:
+
+>![](http://ww2.sinaimg.cn/large/6313a6d8jw1et0gkfhl1xj20my090abb.jpg =600x)
+
+然而Exercise的描述里说到`TIPG`的值需要用在`13.4.34`节中提到的IEEE 802.3标准IPG的默认值：
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1et2auq1anfj20zy14inca.jpg =600x)
+
+![](http://ww3.sinaimg.cn/large/6313a6d8jw1et2av8jtbfj20xs0li10d.jpg =600x)
+
+`IPGT1`默认值`8`，`IPGT2`的默认值为`6`，而且标准要求两者之间满足`3*IPGT1=2*IPGT2`，默认值显然是不满足的。然而后两者只在半双工时有显著影响，因此随便取一者的默认值，并令另一方满足等式关系即可。
+
+最终取值`IPGT=10` `IPG1=4` `IPG2=6`
+
+参考manual 3.3.3节：
+
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1et0gddvqo3j20sc07sdhq.jpg =600x)
+
+设计tx descriptor的结构如下（lab的介绍里也直接提供了）：
+
+```
+struct tx_desc
 {
-   struct Fsreq_read *req = &ipc->read;
-   struct Fsret_read *ret = &ipc->readRet;
+   uint64_t addr;
+   uint16_t length;
+   uint8_t cso;
+   uint8_t cmd;
+   uint8_t status;
+   uint8_t css;
+   uint16_t special;
+} __attribute__((packed));
+```
 
-   if (debug)
-      cprintf("serve_read %08x %08x %08x\n", envid, 
-         req->req_fileid, req->req_n);
-`
-   // Lab 5: Your code here:
-   struct OpenFile *o;
-   int r;
+在`kern/e1000.c` `e1000_attach`中添加上述初始化代码：
 
-   if ((r = openfile_lookup(envid, req->req_fileid, &o)) < 0)
-      return r;
-
-   if ((r = file_read(o->o_file, ret->ret_buf, req->req_n, 
-      o->o_fd->fd_offset)) < 0)
-      return r;
-
-   o->o_fd->fd_offset += r;
-
-   return r;
+```
+memset(tx_desc_arr, 0, sizeof(struct tx_desc)*E1000_TXDESC);
+memset(tx_pkt_buf, 0, sizeof(struct tx_pkt)*E1000_TXDESC);
+for (i = 0; i < E1000_TXDESC; i++) {
+   tx_desc_arr[i].addr = PADDR(tx_pkt_buf[i].buf);
+   tx_desc_arr[i].status = E1000_TXD_STAT_DD;
+   tx_desc_arr[i].cmd = E1000_TXD_CMD_RS|E1000_TXD_CMD_EOP;
 }
+
+// Program the Transmit Descriptor Base Address Register
+e1000[E1000_TDBAL] = PADDR(tx_desc_arr);
+e1000[E1000_TDBAH] = 0;
+
+// Set the Transmit Descriptor Length Register
+e1000[E1000_TDLEN] = sizeof(struct tx_desc) * E1000_TXDESC;
+
+// Initialize the Transmit Descriptor Head and Tail Registers
+e1000[E1000_TDH] = 0;
+e1000[E1000_TDT] = 0;
+
+// Initialize the Transmit Control Register
+e1000[E1000_TCTL] = E1000_TCTL_EN|E1000_TCTL_PSP|
+   (E1000_TCTL_CT & (0x10 << 4))|(E1000_TCTL_COLD & (0x40 <<12));
+
+// Program the Transmit IPG Register
+e1000[E1000_TIPG] = 10|(4<<10)|(6<<20);
+```
+
+以下是参考`e1000_hw.h`向`kern/e1000.h`中添加的常量：
+
+```c
+#define E1000_TXDESC       64
+#define TX_PKT_SIZE     1518
+
+#define E1000_TDBAL        (0x03800>>2)  /* TX Descriptor Base Address Low - RW */
+#define E1000_TDBAH        (0x03804>>2)  /* TX Descriptor Base Address High - RW */
+#define E1000_TDLEN        (0x03808>>2)  /* TX Descriptor Length - RW */
+#define E1000_TDH          (0x03810>>2)  /* TX Descriptor Head - RW */
+#define E1000_TDT          (0x03818>>2)  /* TX Descripotr Tail - RW */
+
+#define E1000_TCTL         (0x00400>>2)  /* TX Control - RW */
+#define E1000_TCTL_EN      0x00000002 /* enable tx */
+#define E1000_TCTL_PSP     0x00000008 /* pad short packets */
+#define E1000_TCTL_CT      0x00000ff0 /* collision threshold */
+#define E1000_TCTL_COLD    0x003ff000 /* collision distance */
+
+#define E1000_TIPG         (0x00410>>2)  /* TX Inter-packet gap -RW */
+
+#define E1000_TXD_CMD_RS   0x00000008 /* Report Status */
+#define E1000_TXD_CMD_EOP  0x00000001 /* End of Packet */
+#define E1000_TXD_STAT_DD  0x00000001 /* Descriptor Done */
+
 ```
 
 #### Exercise 6
 
->Implement `serve_write` in `fs/serv.c` and `devfile_write` in `lib/file.c`.
+>Write a function to transmit a packet by checking that the next descriptor is free, copying the packet data into the next descriptor, and updating TDT. Make sure you handle the transmit queue being full.
 
-参照刚才写的`serve_read`和已有的`devfile_read`函数即可实现，没有难度。
+在`kern/e1000.c`中实现transmit函数，检查下一个transmit descriptor是否为free：
 
-```java
+```
 int
-serve_write(envid_t envid, struct Fsreq_write *req)
+e1000_transmit(char *data, size_t len)
 {
-   if (debug)
-      cprintf("serve_write %08x %08x %08x\n", envid, 
-         req->req_fileid, req->req_n);
+   uint32_t tdt = e1000[E1000_TDT];
 
-   // LAB 5: Your code here.
-   struct OpenFile *o;
-   int r;
+   // Check that the next tx desc is free
+   if (tx_desc_arr[tdt].status & E1000_TXD_STAT_DD) {
+      
+      if (len > TX_PKT_SIZE)
+         len = TX_PKT_SIZE;
+      
+      memmove(tx_pkt_buf[tdt].buf, data, len);
+      
+      tx_desc_arr[tdt].length = len;
 
-   if ((r = openfile_lookup(envid, req->req_fileid, &o)) < 0)
-      return r;
+      tx_desc_arr[tdt].status &= ~E1000_TXD_STAT_DD;
+      tx_desc_arr[tdt].cmd |= E1000_TXD_CMD_RS;
+      tx_desc_arr[tdt].cmd |= E1000_TXD_CMD_EOP;
 
-   if ((r = file_write(o->o_file, req->req_buf, req->req_n, 
-      o->o_fd->fd_offset)) < 0)
-      return r;
+      e1000[E1000_TDT] = (tdt + 1) % E1000_TXDESC;
 
-   o->o_fd->fd_offset += r;
-
-   return r;
+      return 0;
+   }
+   
+   return -E_TX_FULL;
 }
 ```
 
-```java
-static ssize_t
-devfile_write(struct Fd *fd, const void *buf, size_t n)
-{
-   fsipcbuf.write.req_fileid = fd->fd_file.id;
-   fsipcbuf.write.req_n = n < PGSIZE ? n : PGSIZE;
+这里需要注意的是`TDT`的值不是byte偏移而是数组的下标，因此上面的代码在使用`tdt`时无需除`4`。
 
-   memmove(fsipcbuf.write.req_buf, buf, fsipcbuf.write.req_n);
-
-   return fsipc(FSREQ_WRITE, NULL);
-}
-```
+其中涉及的错误`E_TX_FULL`定义在`inc/error.h`中。
 
 #### Exercise 7
 
->`spawn` relies on the new syscall `sys_env_set_trapframe` to initialize the state of the newly created environment. Implement `sys_env_set_trapframe` in `kernel/syscall.c` (don't forget to dispatch the new system call in `syscall()`).
+>Add a system call that lets you transmit packets from user space. The exact interface is up to you. Don't forget to check any pointers passed to the kernel from user space.
 
-跟其他`env`相关的syscall差不多，设置好trapframe，并开启用户态的中断即可。
+添加一个系统调用为用户程序提供调用`e1000_transmit`的接口，检查一下传入虚拟地址，再直接调用就行了：
 
-```java
+```
 static int
-sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
+sys_net_try_send(char *data, size_t len)
 {
-   struct Env *env;
-   if (envid2env(envid, &env, 1) < 0)
-      return -E_BAD_ENV;
-
-   env->env_tf = *tf;
-   env->env_tf.tf_eflags |= FL_IF;
-
-   return 0;
+   user_mem_assert(curenv, data, len, PTE_U);
+   return e1000_transmit(data, len);
 }
 ```
 
-#### Challenge
-
->Implement Unix-style exec.
-
-首先回答前面exercise中的一个问题，`spawn`与`fork`+`exec`的区别在于，后者执行`exec`时，需要子进程在自己的用户空间里完成新程序的加载于执行。
-
-实现思路是在进程空间中用一块区域当做临时空间来加载新程序，然后再由进程自己进行映射和其他一些设置。
-
-在`/lib`目录下添加`exec.c`，并在`inc/lib.c`中加入相应声明，在`lib/Makefrag`中`LIB_SRCFILES`后添加：
-
-```
-lib/exec.c \
-```
-
-`exec.c`中大部分与`spawn.c`一样。区别主要在`exec`函数中：
-
-不`fork`子进程而是直接将新程序加载到`ETEMP`后，并在相邻的位置（根据加载所占的空间而定，而非固定的`USTACKTOP-PGSIZE`）初始化栈空间
-
-```java
-#define ETEMP        (UTEMP3 + PGSIZE)
-
-int
-exec(const char *prog, const char **argv)
-{
-   unsigned char elf_buf[512];
-   // struct Trapframe child_tf;
-   // envid_t child;
-   uintptr_t tf_esp;
-   uint32_t tmp_addr;
-
-   int fd, i, r;
-   struct Elf *elf;
-   struct Proghdr *ph;
-   int perm;
-
-   if ((r = open(prog, O_RDONLY)) < 0)
-      return r;
-   fd = r;
-
-   // Read elf header
-   elf = (struct Elf*) elf_buf;
-   if (readn(fd, elf_buf, sizeof(elf_buf)) != sizeof(elf_buf)
-       || elf->e_magic != ELF_MAGIC) {
-      close(fd);
-      cprintf("elf magic %08x want %08x\n", elf->e_magic, ELF_MAGIC);
-      return -E_NOT_EXEC;
-   }
-   
-   // Set up program segments as defined in ELF header.
-   tmp_addr = (uint32_t) ETEMP;
-   ph = (struct Proghdr*) (elf_buf + elf->e_phoff);
-   for (i = 0; i < elf->e_phnum; i++, ph++) {
-      if (ph->p_type != ELF_PROG_LOAD)
-         continue;
-      perm = PTE_P | PTE_U;
-      if (ph->p_flags & ELF_PROG_FLAG_WRITE)
-         perm |= PTE_W;
-      if ((r = map_segment(0, tmp_addr + PGOFF(ph->p_va), ph->p_memsz,
-                 fd, ph->p_filesz, ph->p_offset, perm)) < 0)
-         goto error;
-      tmp_addr += ROUNDUP(PGOFF(ph->p_va) + ph->p_filesz, PGSIZE);
-   }
-   close(fd);
-   fd = -1;
-
-   if ((r = init_stack(0, argv, &tf_esp, tmp_addr + PGSIZE)) < 0)
-      goto error;
-
-   if ((r = sys_exec(elf->e_entry, tf_esp, 
-      (void *)(elf_buf + elf->e_phoff), elf->e_phnum)) < 0)
-      goto error;
-
-   return 0;
-
-error:
-   sys_env_destroy(0);
-   close(fd);
-   return r;
-}
-```
-
-最后调用新添加的系统调用`sys_exec`来开始执行：
-
-```java
-static int
-sys_exec(uint32_t eip, uint32_t esp, void * _ph, uint32_t phnum) {
-
-   int perm, i, r;
-   uint32_t etmp;
-   uint32_t vs, vt;
-   struct Proghdr * ph;
-   struct PageInfo * pg;
-
-   curenv->env_tf.tf_eip = eip;
-   curenv->env_tf.tf_esp = esp;
-
-   ph = (struct Proghdr *) _ph; 
-   etmp = (uint32_t) UTEMP + 3 * PGSIZE; // ETEMP
-   
-   for (i = 0; i < phnum; i++, ph++) {
-      
-      if (ph->p_type != ELF_PROG_LOAD)
-         continue;
-
-      perm = PTE_P | PTE_U;
-      
-      if (ph->p_flags & ELF_PROG_FLAG_WRITE)
-         perm |= PTE_W;
-
-      vt = ROUNDUP(ph->p_va + ph->p_memsz, PGSIZE);
-      for (vs = ROUNDDOWN(ph->p_va, PGSIZE); vs < vt; 
-         etmp += PGSIZE, vs += PGSIZE) {
-         
-         if ((pg = page_lookup(curenv->env_pgdir, 
-            (void *) etmp, NULL)) == NULL) 
-            return -E_NO_MEM;
-         
-         if ((r = page_insert(curenv->env_pgdir, pg, 
-            (void *) vs, perm)) < 0)
-            return r;
-         
-         page_remove(curenv->env_pgdir, (void *) etmp);
-      }
-   }
-
-   if ((pg = page_lookup(curenv->env_pgdir, 
-      (void *) etmp, NULL)) == NULL) 
-      return -E_NO_MEM;
-   
-   if ((r = page_insert(curenv->env_pgdir, pg, 
-      (void *) (USTACKTOP - PGSIZE), PTE_P|PTE_U|PTE_W)) < 0) 
-      return r;
-   
-   page_remove(curenv->env_pgdir, (void *) etmp);
-
-   env_run(curenv);
-   return 0;
-}
-```
-
-测试:
-
-添加用户程序`user/exechello.c`：
-
-```java
-#include <inc/lib.h>
-
-void
-umain(int argc, char **argv)
-{
-   int r;
-   cprintf("i am parent environment %08x\n", thisenv->env_id);
-   if ((r = execl("hello", "hello", 0)) < 0)
-      panic("exec(hello) failed: %e", r);
-}
-```
-
-结果：
-
-![](http://ww1.sinaimg.cn/large/6313a6d8jw1esra45n632j20tm0ne7bh.jpg =600x)
-
-可以看出两个environment的id都是`00001001`，即在同一个进程中完成了`exec`的执行。
+具体的系统调用添加过程跟以往一致，不再赘述。
 
 #### Exercise 8
 
->Change `duppage` in `lib/fork.c` to follow the new convention. If the page table entry has the `PTE_SHARE` bit set, just copy the mapping directly. (You should use `PTE_SYSCALL`, not `0xfff`, to mask out the relevant bits from the page table entry. `0xfff` picks up the `accessed` and `dirty` bits as well.)
+>Implement net/output.c.
 
->Likewise, implement `copy_shared_pages` in `lib/spawn.c`. It should loop through all page table entries in the current process (just like `fork` did), copying any page mappings that have the `PTE_SHARE` bit set into the child process.
+具体要实现的功能在`output.c`中写得很清楚：
 
-`duppage`中特殊`PTE_SHARE`位为真的情况，将两个`env`的对应页直接进行映射，并清掉`PTE_SHARE`位：
+>- read a packet from the network server
+- send the packet to the device driver
 
-```java
-if (uvpt[pn] & PTE_SHARE) {
-   if ((r = sys_page_map(0, addr, envid, addr, 
-      uvpt[pn] & PTE_SYSCALL)) < 0) 
-      return r;
-   return 0;
-}
+第一步由`lab4`实现的ipc完成，其中传输的缓存放在`union Nsipc`中，其中包含一个结构体
+
+```
+struct jif_pkt {
+    int jp_len;
+    char jp_data[0];
+};
 ```
 
-`copy_shared_pages`：将进程空间里所有的标记了`PTE_SHARE`的页映射到子进程的地址空间；枚举每一页，对页表进行权限位检查后进行映射即可：
+收到ipc请求之后需要检查其来源并且确认其请求类型为`NSREQ_OUTPUT`；
 
-```java
-// Copy the mappings for shared pages into the child address space.
-static int
-copy_shared_pages(envid_t child)
+之后调用之前实现的系统调用即可：
+
+```
+#include "ns.h"
+
+extern union Nsipc nsipcbuf;
+
+void
+output(envid_t ns_envid)
 {
-   // LAB 5: Your code here.
+   binaryname = "ns_output";
+
+   // LAB 6: Your code here:
+   //    - read a packet from the network server
+   // - send the packet to the device driver
    int r;
-   void *addr;
 
-   for (addr = 0; addr < (void *) USTACKTOP; addr += PGSIZE) {
-      if ((uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P)
-         && (uvpt[PGNUM(addr)] & PTE_U) 
-         && (uvpt[PGNUM(addr)] & PTE_SHARE))
-         if ((r = sys_page_map(0, addr, child, addr, 
-            uvpt[PGNUM(addr)] & PTE_SYSCALL)) < 0) 
-            return r;
-      
+   while (1) {
+      r = sys_ipc_recv(&nsipcbuf);
+
+      if ((thisenv->env_ipc_from != ns_envid) ||
+          (thisenv->env_ipc_value != NSREQ_OUTPUT))
+         continue;
+
+      while ((r = sys_net_try_send(nsipcbuf.pkt.jp_data,
+         nsipcbuf.pkt.jp_len)));
    }
-
-   return 0;
 }
+
 ```
+
+测试运行`make E1000_DEBUG=TXERR,TX run-net_testoutput`，得到结果：
+
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1et0i1bi2jaj20xc0muguf.jpg =600x)
+
+测试`tcpdump -XXnr qemu.pcap`：
+
+![](http://ww1.sinaimg.cn/large/6313a6d8jw1et0i3f9f51j20uu0l4aje.jpg =600x)
+
+一次性测试更多的包`make E1000_DEBUG=TXERR,TX NET_CFLAGS=-DTESTOUTPUT_COUNT=100 run-net_testoutput`：
+
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1et0i4ilanfj20rq13kdv3.jpg =600x)
+
+so far so good.
+
+#### Question 1
+
+>How did you structure your transmit implementation? In particular, what do you do if the transmit ring is full?
+
+当transmit ring满时，会将新传来的包drop掉，然后返回给用户失败信息。`output`中发现发送失败（返回`<0`）后，会反复重试直到成功。
+
+### Part B: Receiving packets and the web server
 
 #### Exercise 9
 
->In your `kern/trap.c`, call `kbd_intr` to handle trap `IRQ_OFFSET+IRQ_KBD` and `serial_intr` to handle trap `IRQ_OFFSET+IRQ_SERIAL`.
+>Read section 3.2. You can ignore anything about interrupts and checksum offloading (you can return to these sections if you decide to use these features later), and you don't have to be concerned with the details of thresholds and how the card's internal caches work.
 
-做法如题，毫无难度`_(:з」∠)_`。在`trap_dispatch`中加入以下两句：
+接收包的描述符结构：
 
-```java
-// Handle keyboard and serial interrupts.
-// LAB 5: Your code here.
-if (tf->tf_trapno == IRQ_OFFSET + IRQ_KBD) {
-   kbd_intr();
-   return;
-}
+![](http://ww3.sinaimg.cn/large/6313a6d8jw1et2djv9ruwj20xq09egnm.jpg =600x)
 
-if (tf->tf_trapno == IRQ_OFFSET + IRQ_SERIAL) {
-   serial_intr();
-   return;
-}
+得到：
+
 ```
+struct rx_desc
+{
+   uint64_t addr;
+   uint16_t length;
+   uint16_t chksum;
+   uint8_t status;
+   uint8_t errors;
+   uint16_t special;
+} __attribute__((packed));
+```
+
+接收时的流程：
+
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1et2dkpkeemj20y20ugtca.jpg =600x)
 
 #### Exercise 10
 
->The shell doesn't support I/O redirection. It would be nice to run `sh <script` instead of having to type in all the commands in the script by hand, as you did above. Add I/O redirection for `<` to `user/sh.c`.
+>Set up the receive queue and configure the E1000 by following the process in section 14.4. You don't have to support "long packets" or multicast. For now, don't configure the card to use interrupts; you can change that later if you decide to use receive interrupts. Also, configure the E1000 to strip the Ethernet CRC, since the grade script expects it to be stripped.
 
-因为shell原来已经实现了输出重定向`>`，所以照着写就行了`_(:з」∠)_`，唯一的区别是需要将`fd` `dup`给标准输入流`0`。
+>By default, the card will filter out all packets. You have to configure the Receive Address Registers (RAL and RAH) with the card's own MAC address in order to accept packets addressed to that card. You can simply hard-code QEMU's default MAC address of 52:54:00:12:34:56 (we already hard-code this in lwIP, so doing it here too doesn't make things any worse). Be very careful with the byte order; MAC addresses are written from lowest-order byte to highest-order byte, so 52:54:00:12 are the low-order 32 bits of the MAC address and 34:56 are the high-order 16 bits.
 
-```java
-case '<':   // Input redirection
-   // Grab the filename from the argument list
-   if (gettoken(0, &t) != 'w') {
-      cprintf("syntax error: < not followed by word\n");
-      exit();
+>The E1000 only supports a specific set of receive buffer sizes (given in the description of RCTL.BSIZE in 13.4.22). If you make your receive packet buffers large enough and disable long packets, you won't have to worry about packets spanning multiple receive buffers. Also, remember that, just like for transmit, the receive queue and the packet buffers must be contiguous in physical memory.
+
+这次轮到写receive的初始化，同样先看看manual的14.4节怎么说：
+
+>*Program the Receive Address Register**(s) (RAL/RAH) with the desired Ethernet addresses. RAL[0]/RAH[0] should always be used to store the Individual Ethernet MAC address of the Ethernet controller. This can come from the EEPROM or from any other means (for example, on some machines, this comes from the system PROM not the EEPROM on the adapter port).
+
+>...
+
+>**Allocate a region of memory for the receive descriptor list**. Software should insure this memory is aligned on a paragraph (16-byte) boundary. Program the Receive Descriptor Base Address (RDBAL/RDBAH) register(s) with the address of the region. RDBAL is used for 32-bit addresses and both RDBAL and RDBAH are used for 64-bit addresses.
+
+>**Set the Receive Descriptor Length (RDLEN) register** to the size (in bytes) of the descriptor ring. This register must be 128-byte aligned.
+
+>**The Receive Descriptor Head and Tail registers are initialized** (by hardware) to 0b after a power-on or a software-initiated Ethernet controller reset. Receive buffers of appropriate size should be allocated and pointers to these buffers should be stored in the receive descriptor ring. Software initializes the Receive Descriptor Head (RDH) register and Receive Descriptor Tail (RDT) with the appropriate head and tail addresses. Head should point to the first valid receive descriptor in the descriptor ring and tail should point to one descriptor beyond the last valid descriptor in the descriptor ring.
+
+>**Program the Receive Control (RCTL) register** with appropriate values for desired operation to include the following:
+
+>- Set the receiver Enable (RCTL.EN) bit to 1b for normal operation. However,it is best to leave the Ethernet controller receive logic disabled (RCTL.EN = 0b) until after the receive descriptor ring has been initialized and software is ready to process received packets.
+- Set the Long Packet Enable (RCTL.LPE) bit to 1b when processing packets greater than the standard Ethernet packet size. For example, this bit would be set to 1b when processing Jumbo Frames.
+- Loopback Mode (RCTL.LBM) should be set to 00b for normal operation.
+- Configure the Receive Descriptor Minimum Threshold Size (RCTL.RDMTS) bitstothe desired value.
+- Configure the Multicast Offset (RCTL.MO) bits to the desired value.
+- Set the Broadcast AcceptMode (RCTL.BAM) bit to 1b allowing the hardware to accept broadcast packets.
+- Configure the Receive Buffer Size (RCTL.BSIZE) bits to reflect the size of the receive buffers software provides to hardware. Also configure the Buffer Extension Size (RCTL.BSEX) bits if receive buffer needs to be larger than 2048 bytes.
+- Set the Strip Ethernet CRC (RCTL.SECRC) bit if the desire is for hardware to strip the CRC prior to DMA-ing the receive packet to host memory.
+- ...
+
+按照上述顺序进行初始化：
+
+
+设置MAC地址（被hard-coded为`52:54:00:12:34:56`）
+
+```
+uint32_t MAC[2] = {0x12005452, 0x5634};
+
+e1000[E1000_RAL] = MAC[0];
+e1000[E1000_RAH] = MAC[1];
+e1000[E1000_RAH] |= 0x80000000;
+```
+
+初始化描述符数组和缓存，并设置描述符表的地址：
+
+```
+memset(rx_desc_arr, 0, sizeof(struct rx_desc) * E1000_RXDESC);
+memset(rx_pkt_buf, 0, sizeof(struct rx_pkt) * E1000_RXDESC);
+for (i = 0; i < E1000_RXDESC; i++) {
+   rx_desc_arr[i].addr = PADDR(rx_pkt_buf[i].buf);
+   rx_desc_arr[i].status = 0;
+}
+
+e1000[E1000_RDBAL] = PADDR(rx_desc_arr);
+e1000[E1000_RDBAH] = 0;
+```
+
+设置接收描述符表大小：
+
+```
+e1000[E1000_RDLEN] = sizeof(struct rx_desc) * E1000_RXDESC;
+```
+
+初始化描述符队列的首尾指针：
+
+```
+e1000[E1000_RDH] = 0;
+e1000[E1000_RDT] = 0;
+```
+
+设置控制寄存器：
+
+```
+e1000[E1000_RCTL] = E1000_RCTL_EN;
+e1000[E1000_RCTL] &= ~E1000_RCTL_LPE;
+e1000[E1000_RCTL] &= ~E1000_RCTL_LBM;
+e1000[E1000_RCTL] &= ~E1000_RCTL_RDMTS;
+e1000[E1000_RCTL] &= ~E1000_RCTL_MO;
+e1000[E1000_RCTL] |= E1000_RCTL_BAM;
+e1000[E1000_RCTL] |= E1000_RCTL_BSIZE;
+e1000[E1000_RCTL] |= E1000_RCTL_SECRC;
+```
+
+测试`make E1000_DEBUG=TX,TXERR,RX,RXERR,RXFILTER run-net_testinput`：
+
+```
+e1000: unicast match[0]: 52:54:00:12:34:56
+```
+
+#### Exercise 11
+
+>Write a function to receive a packet from the E1000 and expose it to user space by adding a system call. Make sure you handle the receive queue being empty.
+
+>If you decide to use interrupts to detect when packets are received, you'll need to write code to handle these interrupts. If you do use interrupts, note that, once an interrupt is asserted, it will remain asserted until the driver clears the interrupt. In your interrupt handler make sure to clear the interrupt handled as soon as you handle it. If you don't, after returning from your interrupt handler, the CPU will jump back into it again. In addition to clearing the interrupts on the E1000 card, interrupts also need to be cleared on the LAPIC. Use lapic_eoi to do so.
+
+与`e1000_transmit`类似：
+
+```
+size_t
+e1000_receive(char *data, size_t len)
+{
+   uint32_t rdt;
+   rdt = e1000[E1000_RDT];
+
+   if (rx_desc_arr[rdt].status & E1000_RXD_STAT_DD) {
+
+      if (len > rx_desc_arr[rdt].length)
+         len = rx_desc_arr[rdt].length;
+      
+      memmove(data, rx_pkt_buf[rdt].buf, len);
+      
+      rx_desc_arr[rdt].status &= ~E1000_RXD_STAT_DD;
+      rx_desc_arr[rdt].status &= ~E1000_RXD_STAT_EOP;
+
+      e1000[E1000_RDT] = (rdt + 1) % E1000_RXDESC;
+
+      return len;
    }
-
-   if ((fd = open(t, O_RDONLY)) < 0) {
-      cprintf("open %s for read: %e", t, fd);
-      exit();
-   }
-   if (fd != 0) {
-      dup(fd, 0);
-      close(fd);
-   }
-   break;
-```
-
-#### Challenge
-
->Add more features to the shell. Possibilities include (a few require changes to the file system too):
-
->
-   backgrounding commands (ls &)
-   multiple commands per line (ls; echo hi)
-   command grouping ((ls; echo hi) | cat > out)
-   environment variable expansion (echo $hello)
-   quoting (echo "a | b")
-   command-line history and/or editing
-   tab completion
-   directories, cd, and a PATH for command-lookup.
-   file creation
-   ctl-c to kill the running environment
-
->
-but feel free to do something not on this list.
-
-实现了
-
-- 后台命令 `(ls &)`
-- 一行多命令 `(ls; echo hi)`
-- 引号 `(echo "a | b")`
-- shell的命令历史 (history)
-- 文件创建 (touch)
-- ctl-c杀死当前进程
-
-----
-
-- **后台命令 `(ls &)`**
-
-`user/sh.c`在分析token已经把`&`和`;`加入到符号列表了：
-
-```
-#define SYMBOLS "<|>&;()"
-```
-
-只需在`runcmd`中加入对相应情况的处理即可。
-
-在读token时发现读入了`&`，则在后面运行时父进程不等待spawn出来的子进程，而继续自己的执行。
-
-- **一行多命令 `(ls; echo hi)`**
-
-在判断存在`;`token的情况下，在执行完毕后进行处理：
-
-```java
-if (r > 0 && more) {
-   if ((r = opencons()) < 0)
-      panic("opencons: %e", r);
-   if (r != 0)
-      panic("first opencons used fd %d", r);
-   if ((r = dup(0, 1)) < 0)
-      panic("dup: %e", r);
-   goto again;
+   
+   return -E_RX_EMPTY;
 }
 ```
 
-因为之前有`closeall`操作，这里需要恢复到控制台的标准输入输出流。
+接收的系统调用也类似：
 
-- **引号 `(echo "a | b")`**
-
-修改`_gettoken`函数。加入静态变量`inquote`标记当前处理的字串是否在一对引号之间，来进行相应的处理。
-
-```java
-...
-// 一对引号的第二个
-if (inquote && *s == '"') {
-   inquote = 0;
-   *s++ = 0;
-}
-...
-// 一对引号的第一个
-if (*s == '"') {
-   (*p1)++;
-   inquote = 1;
-   do {
-      s++;
-   } while (*s && *s != '"');
-}
-while (*s && !strchr(WHITESPACE SYMBOLS, *s) && *s != '"')
-   s++;
-...
 ```
-
-**前三项的测试**：
-
-![](http://ww2.sinaimg.cn/large/6313a6d8jw1esr8x1igqhj20vk0owtbq.jpg =600x)
-
-其中包含了`;`，`&`，`"`三个部分的测试。`echo "_(:3/_)_"指令由于在后面加了&`，所以其结果在`sh`输出了`$`后才输出。
-
-- **shell的命令历史 (history)**
-
-将shell命令的历史保存进文件`.history`（同时修改了`ls`使其默认不会输出名字以`.`开头的文件）。shell每次执行一个指令都会将其加在`.history`的最后一行。另外还加入了`history`指令，来读取`.history`中的内容并显示。
-
-写历史记录，由于JOS打开文件没有append的选项，因此需要手动读取文件状态，来找到其末尾：
-
-```java
-void write_history(char *s) {
-   int rfd, r, n;
-   struct Stat sta;
-
-   if (debug)
-      cprintf("HISOTRY: %s\n", s);
-
-   if ((rfd = open("/.history", O_RDWR | O_CREAT)) < 0)
-      panic("open /.history: %e", rfd);
-
-   if ((r = stat("/.history", &sta)) < 0)
-      panic("stat /.history: %e", r);
-
-   seek(rfd, sta.st_size);
-
-   for (n = 0; s[n]; n++);
-   s[n++] = '\n';
-   s[n] = '\0';
-   if ((r = write(rfd, s, n)) != n)
-      panic("write /.history: %e", r);
-
-   close(rfd);
+static size_t
+sys_net_recv(char *data, size_t len)
+{
+   user_mem_assert(curenv, data, len, PTE_U | PTE_W);
+   return e1000_receive(data, len);
 }
 ```
 
-添加`history`指令，首先在`/user`目录下编写`history.c`代码：
+#### Exercise 12
+
+>Implement `net/input.c`.
+
+在从设备驱动接收到数据前反复尝试，接收到后将其发送到network server：
+
 
 ```
-#include <inc/lib.h>
+#include "ns.h"
+
+extern union Nsipc nsipcbuf;
 
 void
-umain(int argc, char **argv)
+input(envid_t ns_envid)
 {
-   int rfd;
-   char buf[512];
-   int n;
+   binaryname = "ns_input";
+   char buf[2048];
 
-   if ((rfd = open("/.history", O_RDONLY | O_CREAT)) < 0)
-      panic("open /.history: %e", rfd);
+   int len, r, i;
+   int perm = PTE_U | PTE_P | PTE_W;
+   len = RECV_BUF_SIZE -1;
 
-   while ((n = read(rfd, buf, sizeof buf-1)) > 0)
-      sys_cputs(buf, n);
+   while (1) {
+      while ((len = sys_net_recv(buf, len)) < 0)
+         sys_yield();
 
-   close(rfd);
+      while ((r = sys_page_alloc(0, &nsipcbuf, perm)) < 0);
+
+      nsipcbuf.pkt.jp_len = len;
+      memmove(nsipcbuf.pkt.jp_data, buf, nsipcbuf.pkt.jp_len);
+
+      while ((r = sys_ipc_try_send(ns_envid, NSREQ_INPUT, &nsipcbuf, perm)) < 0);
+   }
 }
 ```
 
-然后在`fs/Makefrag`文件中的`USERAPP`后添加：
+测试`make E1000_DEBUG=TX,TXERR,RX,RXERR,RXFILTER run-net_testinput`：
+
+![](http://ww3.sinaimg.cn/large/6313a6d8jw1et2e2i7l3mj20xs0n0aiz.jpg =600x)
+
+结果正确。
+
+#### Question 2
+
+>How did you structure your receive implementation? In particular, what do you do if the receive queue is empty and a user environment requests the next incoming packet?
+
+与transmit时类似，如果接收队列为空则返回错误；用户发现错误则会反复尝试，直到成功接收为止。
+
+#### Challenge 1
+
+>Read about the EEPROM in the developer's manual and write the code to load the E1000's MAC address out of the EEPROM. Currently, QEMU's default MAC address is hard-coded into both your receive initialization and lwIP. Fix your initialization to use the MAC address you read from the EEPROM, add a system call to pass the MAC address to lwIP, and modify lwIP to the MAC address read from the card. Test your change by configuring QEMU to use a different MAC address.
+
+Manual的5.3.1节如是说：
+
+>Software can use the EEPROM Read register (EERD) to cause the Ethernet controller to read a word from the EEPROM that the software can then use. To do this, software writes the address to read the Read Address (EERD.ADDR) field and then simultaneously writes a 1b to the Start Read bit (EERD.START). The Ethernet controller then reads the word from the EEPROM, sets the Read Done bit (EERD.DONE), and puts the data in the Read Data field (EERD.DATA). Software can poll the EEPROM Read register until it sees the EERD.DONE bit set, then use the data from the EERD.DATA field. Any words read this way are not written to hardware’s internal registers.
+Software can also directly access the EEPROM’s 4-wire interface through the EEPROM/FLASH Control Register (EEC). It can use this for reads, writes, or other EEPROM operations.
+
+再根据5.6.1节：
+
+>The Ethernet Individual Address (IA) is a six-byte field that must be unique for each Ethernet port (and unique for each copy of the EEPROM image). The first three bytes are vendor specific. The value from this field is loaded into the Receive Address Register 0 (RAL0/RAH0). For a MAC address of 12-34-56-78-90-AB, words 2:0 load as follows (note that these words are byte- swapped):
+>
+   Word 0 = 3412 
+   Word 1 = 7856 
+   Word 2 = AB90
+
+从`EERD`的`EERD_START`开始逐字读入直到`EERD_DONE`为真，读出这三个字然后存入`RAL/RAH`
 
 ```
-$(OBJDIR)/user/history \
+for (e1000[E1000_EERD] = 0x0, e1000[E1000_EERD] |= E1000_EERD_START;
+   !(e1000[E1000_EERD] & E1000_EERD_DONE); e1000[E1000_EERD] >>= 16);
+e1000[E1000_RAL] = e1000[E1000_EERD] >> 16;
+
+for (e1000[E1000_EERD] = 0x1 << 8, e1000[E1000_EERD] |= E1000_EERD_START;
+   !(e1000[E1000_EERD] & E1000_EERD_DONE); e1000[E1000_EERD] >>= 16);
+e1000[E1000_RAL] |= e1000[E1000_EERD] & 0xffff0000;
+
+for (e1000[E1000_EERD] = 0x2 << 8, e1000[E1000_EERD] |= E1000_EERD_START;
+   !(e1000[E1000_EERD] & E1000_EERD_DONE); e1000[E1000_EERD] >>= 16);
+e1000[E1000_RAH] = e1000[E1000_EERD] >> 16;
+
+e1000[E1000_RAH] |= 0x80000000;
 ```
 
-**测试**：
+在最后一句前加了一句`cprintf("%x %x\n", e1000[E1000_RAH], e1000[E1000_RAL]);`输出：
 
-![](http://ww4.sinaimg.cn/large/6313a6d8jw1esr96revyaj20ss0mmwh8.jpg =600x)
+![](http://ww2.sinaimg.cn/large/6313a6d8jw1et2g4y9ezij207o02sdg3.jpg =120x)
 
-- **文件创建 (touch)**
+再测试`make grade`：
 
-比较简单，添加指令`touch`。过程跟`history`类似，先编写`user/touch.c`，再向`fs/Makefrag`中添加相应条目。
+![](http://ww3.sinaimg.cn/large/6313a6d8jw1et2g848mttj20xk0mwdmz.jpg =600x)
 
-`touch.c`：
+结果正确~
+
+#### Exercise 13
+
+>The web server is missing the code that deals with sending the contents of a file back to the client. Finish the web server by implementing send_file and send_data.
+
+`send_data`：读出文件大小，然后读出文件内容并写入`sock`
 
 ```
-#include <inc/lib.h>
-
-void
-umain(int argc, char **argv)
+static int
+send_data(struct http_request *req, int fd)
 {
-   int rfd;
-   char buf[512];
+   // LAB 6: Your code here.
+   
+   char buf[MAX_PACKET_SIZE];
+   int r;
+   struct Stat stat;
 
-   if ((rfd = open(argv[1], O_WRONLY | O_CREAT)) < 0)
-      panic("open %s: %e", argv[1], rfd);
+   if ((r = fstat(fd, &stat)) < 0)
+      die("send_data: fstat failed.");
 
-   close(rfd);
+   if ((r = readn(fd, buf, stat.st_size)) != stat.st_size)
+      die("send_data: readn failed.");
+
+   if ((r = write(req->sock, buf, stat.st_size)) != stat.st_size)
+      die("send_data: write failed.");
+
+   return 0;
 }
 ```
 
-- **ctl-c杀死当前进程**
-
-反复翻看JOS的代码之后发现接收键盘输入到得到相应的字符这一步由`kern/console.c`完成。
-
-在其中的`kbd_proc_data`函数中加入：
-
-```java
-if ((shift & CTL) && c == C('C'))
-   return SIGINT;
-```
-
-其中`(shift & CTL)`为真代表`ctl`键被按下，`c`为输入的字符，`C('C')`为`ctl`按下时键盘上`c`键对应的字符。由此可以得到`ctl+c`按下时的状态。
-
-`SIGINT`是添加在`inc/stdio.h`中的一个常量，是我自定义的`ctl+c`的ascii字符编号(0x11)。
-
-由于shell读取输入是在`readline`中进行的，需要对其进行修改：如果读到`SIGINT`则结束读取，忽略后面的内容。
-
-在shell中判断，如果读入了`SIGINT`，则结束当前进程。
-
-**测试**:
-
-![](http://ww4.sinaimg.cn/large/6313a6d8jw1esr9fmkw8gj20tu0nc7bh.jpg =600x)
-
-其中
+`send_file`补充代码，在文件不存在或者为目录的情况下返回`404`错误，文件存在的情况下设置`file_size`即可：
 
 ```
-$ sh
-$ $ cat lorem
+if((fd = open(req->url, O_RDONLY)) < 0) {
+   send_error(req, 404);
+   goto end;
+}
+if(st.st_isdir) {
+   send_error(req, 404);
+   goto end;
+}
+if(fstat(fd, &st) < 0) {
+   send_error(req, 501);
+   goto end;
+}
+file_size = st.st_size;
 ```
 
-间按了一次`ctl+c`，结束了刚启动的`sh`回到了外层的`sh`。
+测试`make grade`：
 
-最后的
+![](http://ww4.sinaimg.cn/large/6313a6d8jw1et2acl3pg0j20x00mm10k.jpg =600x)
 
-```
-$ init: starting sh
-```
+#### Question 3
 
-是外层`sh`也接收到`ctl+c`结束后，返回到`user/init.c`时输出的。（`user/init.c`里会循环spawn出一个`sh`并等待其结束）
+>What does the web page served by JOS's web server say?
 
-----
+如下
+
+>This file came from JOS.
+>Cheesy web page!
+
+#### Question 4
+
+>How long approximately did it take you to do this lab?
+
+3 whole days
 
 ## 遇到的困难以及解决方法
 
-这次lab比较简单，没有遇到什么困难。
+这次主要的难度在于对于文档的阅读，并将其实现这件事。实现的过程中遇到的问题大多数都是来自于阅读文档时漏掉了细节（主要是在初始化阶段的设置时出了问题）。反复对照文档修改总算把问题解决了。
+
+还有一个问题是，做到Exercise 12的时候，死活不出结果。。最后发现好像是新版的QEMU出了问题，最后装了教学网上放出的QEMU后终于能通过了。
 
 ## 收获及感想
 
-这次lab把之前只有理论知识的文件系统实现了一遍。虽然很多部分都已经有完整的代码，实际需要写的地方不是很多。不过在阅读代码的过程中也是获益匪浅，特别是用户进程与fileserver进行ipc通信的过程，让我对其他进程执行文件操作的整个过程有了具体的了解，同时也再次熟悉了一下ipc。
+这次lab与之前最大的不同在于，之前的lab需要阅读大量的代码，而且注释都非常详细。而这次的lab主要任务是对文档的阅读与理解，感觉在反反复复调试修改的过程中，对阅读这种技术性文档的能力有了飞跃\_(′ཀ`」 ∠)\_。。
+
+## 参考文献
+
+[1] [PCI/PCI-X Family of Gigabit Ethernet Controllers Software Developer’s Manual](http://pdosnew.csail.mit.edu/6.828/2014/readings/hardware/8254x_GBe_SDM.pdf)
+
+[2] [QEMU's e1000_hw.c](http://pdosnew.csail.mit.edu/6.828/2014/labs/lab6/e1000_hw.h)
