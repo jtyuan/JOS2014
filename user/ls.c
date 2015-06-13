@@ -1,10 +1,18 @@
 #include <inc/lib.h>
 
+#define SEC_PER_MIN	60
+#define SEC_PER_HOUR	3600
+#define SEC_PER_DAY	86400
+#define SEC_PER_MONTH	2678400
+#define SEC_PER_YEAR	32140800 
+
 int flag[256];
 
 void lsdir(const char*, const char*);
 void ls1(const char*, bool, bool, off_t, const char*);
 bool is_snapshot(const char *name);
+int  extract_date(const char *name);
+void cat_path(char *dst, const char *src);
 
 void
 ls(const char *path, const char *prefix)
@@ -43,6 +51,7 @@ void
 ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 {
 	const char *sep;
+	int ts;
 	if(flag['l'])
 		printf("%11d %c ", size, isdir ? 'd' : (islink ? 'l' : '-'));
 	if(prefix) {
@@ -55,6 +64,11 @@ ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	printf("%s", name);
 	if(flag['F'] && isdir)
 		printf("/");
+	if (flag['s'] && (ts = extract_date(name)) > 0) {
+		cprintf("(GMT+00 %02d/%02d/%02d %02d:%02d:%02d)", 
+		(ts/SEC_PER_YEAR), (ts/SEC_PER_MONTH)%12, (ts/SEC_PER_DAY)%31, 
+		(ts/SEC_PER_HOUR)%24, (ts/SEC_PER_MIN)%60, ts%60);
+	}
 	printf("\n");
 }
 
@@ -69,6 +83,21 @@ bool is_snapshot(const char *name)
 			return false;
 	}
 	return true;
+}
+
+int extract_date(const char *name)
+{
+	char *pos = strrchr(name, '@');
+	pos++;
+	return atoi(pos);
+}
+
+void
+cat_path(char *dst, const char *src)
+{
+	if (dst[strlen(dst)-1] != '/' && src[0] != '/')
+		strcat(dst, "/");
+	strcat(dst, src);
 }
 
 void

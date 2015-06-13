@@ -4,8 +4,12 @@ int flag;
 int recur;
 int verbose;
 
+char buf[1024], buf_pre[1024];
+char src_path[1024];
+char dst_path[1024], old_path[1024];
+
 void ssdir(const char*, const char*);
-void ss1(const char*, bool, off_t, const char*, const char*);
+void ss1(const char*, bool, bool, off_t, const char*, const char*);
 bool is_snapshot(const char*);
 void cat_path(char *dst, const char *src);
 
@@ -27,7 +31,7 @@ snapshot(const char *path, const char *dst)
 		ssdir(path, dst);
 	}
 	else
-		ss1(path, st.st_isdir, st.st_size, 0, dst);
+		ss1(path, st.st_isdir, st.st_islink, st.st_size, 0, dst);
 }
 
 void
@@ -35,15 +39,17 @@ ssdir(const char *path, const char *dst)
 {
 	int fd, n, r;
 	struct File f;
-	char buf[256], buf_pre[256];
 
 	// cprintf("%s %s\n", path, dst);
 
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
+	// cprintf("survived\n");
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
+		// cprintf("%s\n", f.f_name);
 		if (f.f_name[0] && !is_snapshot(f.f_name)) {
-			ss1(path, f.f_type==FTYPE_DIR, f.f_size, f.f_name, dst);
+			// cprintf("%s\n", f.f_name);
+			ss1(path, f.f_type==FTYPE_DIR, f.f_type==FTYPE_LNK, f.f_size, f.f_name, dst);
 			if (recur && f.f_type == FTYPE_DIR) {
 				strcpy(buf, path);
 				cat_path(buf, f.f_name);
@@ -60,14 +66,17 @@ ssdir(const char *path, const char *dst)
 }
 
 void
-ss1(const char *path, bool isdir, off_t size, const char *name, const char *dst)
+ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, const char *dst)
 {
+
+	if (islink)
+		return;
+
 	int r, rfd, wfd, lfd;
 	size_t offset, len;
 	size_t old_offset, old_len;
 	struct Stat st;
-	char src_path[256] = "\0";
-	char dst_path[256], old_path[256];
+	
 	if (path)
 		strcpy(src_path, path);
 	if (name)
@@ -183,8 +192,8 @@ bool is_snapshot(const char *name)
 void
 usage(void)
 {
-	// naïve/cow/incremental
-	printf("usage: snapshot [-(n|c|i)rv] [file...]\n");
+	// naïve/cow
+	printf("usage: snapshot [-(n|c)rv] [file...]\n");
 	exit();
 }
 
@@ -200,14 +209,13 @@ umain(int argc, char **argv)
 
 	flag = 'c';
 	recur = 0;
-	verbose = 0;
+	verbose = 1;
 
 	argstart(&argc, argv, &args);
 	while ((i = argnext(&args)) >= 0)
 		switch (i) {
 		case 'n':
 		case 'c':
-		case 'i':
 			flag = i;
 			break;
 		case 'r':
@@ -233,7 +241,6 @@ umain(int argc, char **argv)
 			strcpy(prefix, argv[i]);
 			strcat(prefix, "@");
 			strcat(prefix, ts);
-			// cprintf("%s\n", prefix);
 			snapshot(argv[i], prefix);
 		}
 	}

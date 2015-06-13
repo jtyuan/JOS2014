@@ -4,6 +4,9 @@ int recur;
 int verbose;
 char buf[1024];
 
+char buf_src[1024], buf_dst[1024];
+char dst_path[1024];
+
 void cp1(const char *src_path, const char *dst_path, bool isdir, const char *f_name);
 bool is_snapshot(const char*);
 void cat_path(char *dst, const char *src);
@@ -14,10 +17,10 @@ cp(const char *src_path, const char *dst_path_in)
 	int rfd, wfd, n, r;
 	struct File f;
 	struct Stat rst, wst;
-	char buf[256], buf_dst[256];
-	char dst_path[256];
+	
 
 	strcpy(dst_path, dst_path_in);
+	cprintf("%s %s\n", src_path, dst_path);
 
 	if ((rfd = open(src_path, O_RDONLY)) < 0) {
 		cprintf("open %s: %e\n", src_path, rfd);
@@ -27,7 +30,7 @@ cp(const char *src_path, const char *dst_path_in)
 
 	if ((r = fstat(rfd, &rst)) < 0)
 		panic("stat %s: %e", src_path, r);
-
+		
 	if (rst.st_isdir) {
 		if (!recur) {
 			cprintf("cp: %s is a directory (not copied).\n", src_path);
@@ -48,18 +51,19 @@ cp(const char *src_path, const char *dst_path_in)
 		
 		if ((r = fstat(wfd, &wst)) < 0)
 			panic("stat %s: %e", dst_path, r);
-		if (!wst.st_isdir) {
+		if (!wst.st_isdir)
 			cprintf("cp: %s: Not a directory\n", dst_path);
-		}
+
+
 		// both src and dst are dir
 		
 		while ((n = readn(rfd, &f, sizeof f)) == sizeof f) {
 			if (f.f_name[0] && !is_snapshot(f.f_name)) {
 				cp1(src_path, dst_path, f.f_type==FTYPE_DIR, f.f_name);
 				if (f.f_type == FTYPE_DIR && f.f_size > 0) {
-					strcpy(buf, src_path);
-					cat_path(buf, f.f_name);
-					cp(buf, dst_path);
+					strcpy(buf_src, src_path);
+					cat_path(buf_src, f.f_name);
+					cp(buf_src, dst_path);
 				}
 			}
 		}
@@ -99,7 +103,8 @@ cp1(const char *src_path_, const char *dst_path_, bool isdir, const char *f_name
 		// 	return;
 		// if (r >= 0)
 		// 	wait(r);
-		
+		if (verbose)
+			cprintf("Making dir %s\n", dst_path);
 		if ((wfd = open(dst_path, O_MKDIR)) < 0)
 			cprintf("open %s: %e\n", dst_path, wfd);
 

@@ -29,6 +29,6 @@ int 	isdigit(int c);
 int 	isxdigit(int c);
 
 char *	itoa(int num, char *str, int base);
-int	atoi(char *num);
+int		atoi(const char *num);
 
 #endif /* not JOS_INC_STRING_H */

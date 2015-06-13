@@ -358,7 +358,7 @@ isxdigit(int c)
 }
 
 int
-atol(const char *num)
+atoi(const char *num)
 {
 	long value = 0;
 	int neg = 0;
