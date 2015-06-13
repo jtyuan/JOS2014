@@ -413,12 +413,13 @@ sys_ipc_recv(void *dstva)
 
 	if (dstva < (void *) UTOP && dstva != ROUNDDOWN(dstva, PGSIZE))
 		return -E_INVAL;
-
 	curenv->env_ipc_recving = 1;
 	curenv->env_ipc_dstva = dstva;
+	curenv->env_ipc_value = 0;
+	curenv->env_ipc_from = 0;
+	curenv->env_ipc_perm = 0;
 	curenv->env_status = ENV_NOT_RUNNABLE;
-	sys_yield();
-
+	// sys_yield();
 	return 0;
 }
 
@@ -432,24 +433,17 @@ sys_time_msec(void)
 }
 
 static int
-sys_net_try_send(char *data, int len)
+sys_net_try_send(char *data, size_t len)
 {
-	if ((uintptr_t) data >= UTOP)
-		return -E_INVAL;
-
+	user_mem_assert(curenv, data, len, PTE_U);
 	return e1000_transmit(data, len);
 }
 
-static int
-sys_net_try_receive(char *data, int *len)
+static size_t
+sys_net_recv(char *data, size_t len)
 {
-	if ((uintptr_t) data >= UTOP)
-		return -E_INVAL;
-
-	*len = e1000_receive(data);
-	if (*len > 0)
-		return 0;
-	return *len;
+	user_mem_assert(curenv, data, len, PTE_U | PTE_W);
+	return e1000_receive(data, len);
 }
 
 static int
@@ -502,9 +496,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	case SYS_time_msec:
 		return sys_time_msec();
 	case SYS_net_try_send:
-		return sys_net_try_send((char *) a1, a2);
-	case SYS_net_try_receive:
-		return sys_net_try_receive((char *) a1, (int *) a2);
+		return sys_net_try_send((char *) a1, (size_t) a2);
+	case SYS_net_recv:
+		return sys_net_recv((char *) a1, (size_t) a2);
 	case SYS_get_mac:
 		return sys_get_mac((uint32_t *) a1, (uint32_t *) a2);
 	default:

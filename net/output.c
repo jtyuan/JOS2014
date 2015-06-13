@@ -20,6 +20,6 @@ output(envid_t ns_envid)
 			continue;
 
 		while ((r = sys_net_try_send(nsipcbuf.pkt.jp_data,
-			nsipcbuf.pkt.jp_len)) != 0);
+			nsipcbuf.pkt.jp_len)));
 	}
 }

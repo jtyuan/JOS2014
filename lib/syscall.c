@@ -124,15 +124,15 @@ sys_time_msec(void)
 }
 
 int
-sys_net_try_send(char *data, int len)
+sys_net_try_send(char *data, size_t len)
 {
-	return syscall(SYS_net_try_send, 1, (uint32_t) data, len, 0, 0, 0); 
+	return syscall(SYS_net_try_send, 1, (uint32_t) data, (uint32_t) len, 0, 0, 0); 
 }
 
-int
-sys_net_try_receive(char *data, int *len)
+size_t
+sys_net_recv(char *data, size_t len)
 {
-	return syscall(SYS_net_try_receive, 1, (uint32_t) data, (uint32_t) len, 0, 0, 0); 
+	return syscall(SYS_net_recv, 1, (uint32_t) data, (uint32_t) len, 0, 0, 0); 
 }
 
 int

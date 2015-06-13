@@ -11,11 +11,10 @@ volatile uint32_t *e1000;
 #define E1000_VENDORID		0x8086
 #define E1000_DEVICEID		0x100e
 
-
 #define E1000_TXDESC 		64
-#define E1000_RCVDESC 		64
+#define E1000_RXDESC 		64
 #define TX_PKT_SIZE 		1518
-#define RCV_PKT_SIZE 		2048
+#define RX_PKT_SIZE 		2048
 
 #define E1000_TDBAL		(0x03800>>2)  /* TX Descriptor Base Address Low - RW */
 #define E1000_TDBAH		(0x03804>>2)  /* TX Descriptor Base Address High - RW */
@@ -41,6 +40,7 @@ volatile uint32_t *e1000;
 #define E1000_RDLEN 		(0x02808>>2)  /* RX Descriptor Length - RW */
 #define E1000_RDH 		(0x02810>>2)  /* RX Descriptor Head - RW */
 #define E1000_RDT 		(0x02818>>2)  /* RX Descriptor Tail - RW */
+#define E1000_MTA		(0x05200>>2)  /* Multicast Table Array - RW Array */
 #define E1000_RAL 		(0x05400>>2)  /* Receive Address Low - RW */
 #define E1000_RAH 		(0x05404>>2)  /* Receive Address High - RW */
 
@@ -83,7 +83,7 @@ struct tx_pkt
 } __attribute__((packed));
 
 
-struct rcv_desc
+struct rx_desc
 {
 	uint64_t addr;
 	uint16_t length;
@@ -93,13 +93,13 @@ struct rcv_desc
 	uint16_t special;
 } __attribute__((packed));
 
-struct rcv_pkt
+struct rx_pkt
 {
-	uint8_t buf[RCV_PKT_SIZE];
+	uint8_t buf[RX_PKT_SIZE];
 } __attribute__((packed));
 
 int e1000_attach(struct pci_func *pcif);
-int e1000_transmit(char *data, int len);
-int e1000_receive(char *data);
+int e1000_transmit(char *data, size_t len);
+size_t e1000_receive(char *data, size_t len);
 
 #endif	// JOS_KERN_E1000_H

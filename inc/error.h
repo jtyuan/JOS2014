@@ -28,9 +28,8 @@ enum {
 
 
 	// E1000 error codes
-	E_TX_FULL	,   // Transfer queue is full
-	E_BIG_PKT	,   // Packet size is too big
-	E_RCV_EMPTY	,
+	E_TX_FULL	,
+	E_RX_EMPTY	,
 	MAXERROR
 };
 
