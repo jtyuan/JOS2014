@@ -582,31 +582,30 @@ write_back(struct File *f)
 	char wr_buf[1024];
 	// Check if the file is dirty
 	// Ignore the link file
-	// cprintf("%s %d %d %d\n", f->f_name, f->f_size, f->f_link_len, f->f_link_offset);
 	if (f->f_type != FTYPE_LNK && f->f_link_len != FILE_CLEAN) {
 		// find the struct File * of the link record file
-		// if ((r = walk_path(LINK_RECORD, &dir, &f1, dummy)) < 0)
 		if ((r = file_open(LINK_RECORD, &f1)) < 0)
 			return r;
+
 		// read the link file's filename
 		if ((r = file_read(f1, name, f->f_link_len, f->f_link_offset)) < 0)
 			return r;
 		name[f->f_link_len] = '\0';
-		// cprintf("%s %d\n", name, strlen(name));
+		
 		// find the struct File * of the link file
-		// if ((r = walk_path(name, &dir, &f2, dummy)) < 0)
 		if ((r = file_open(name, &f2)) < 0)			
+			return r;
+		if ((r = file_set_size(f2, 0)) < 0)
 			return r;
 
 		// write the content
 		wr_cnt = 0;
-		// cprintf("f->f_size: %d\n", f->f_size);
 		while (wr_cnt < f->f_size) {
-			if ((r = file_read(f, wr_buf, 1024, wr_cnt)) < 0) {
+			if ((r = file_read(f, wr_buf, 1023, wr_cnt)) < 0) {
 				cprintf("file_write: cow/file_read: %s: %e\n", f->f_name, r);
 				return r;
 			}
-			// cprintf("%s\n", wr_buf);
+			
 			if ((r = file_write(f2, wr_buf, r, wr_cnt)) < 0) {
 				cprintf("file_write: cow/file_write: %s: %e\n", f2->f_name, r);
 				return r;

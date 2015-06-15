@@ -158,7 +158,7 @@ cp1(const char *src_file, const char *dst_path, const char *f_name)
 		cprintf("open %s: %e\n", dst_file, wfd);
 		return;
 	}
-	while ((n = read(rfd, src_buf, sizeof(src_buf))) > 0)
+	while ((n = read(rfd, src_buf, sizeof(src_buf)-1)) > 0)
 		if ((r = write(wfd, src_buf, n)) != n) {
 			cprintf("write error copying %s to %s: %e\n", src_file, dst_file, r);
 			exit();
