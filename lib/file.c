@@ -5,8 +5,6 @@
 #define debug 0
 
 
-char tmp_path[256];
-
 union Fsipc fsipcbuf __attribute__((aligned(PGSIZE)));
 
 // Send an inter-environment request to the file server, and wait for
@@ -75,7 +73,7 @@ open(const char *path, int mode)
 	// Return the file descriptor index.
 	// If any step after fd_alloc fails, use fd_close to free the
 	// file descriptor.
-
+	char tmp_path[64];
 	int r, fdnum;
 	struct Fd *fd;
 	struct Stat st;
@@ -106,6 +104,7 @@ open(const char *path, int mode)
 	if (st.st_islink && !(mode & O_LINK)) {
 		// cprintf("????\n");
 		read(fdnum, tmp_path, st.st_size);
+		// cprintf("redirecting to %s\n", tmp_path);
 		close(fdnum);
 		return open(tmp_path, mode);
 	} else {

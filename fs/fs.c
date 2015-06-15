@@ -595,10 +595,9 @@ write_back(struct File *f)
 		// cprintf("%s %d\n", name, strlen(name));
 		// find the struct File * of the link file
 		// if ((r = walk_path(name, &dir, &f2, dummy)) < 0)
-		if ((r = file_open(name, &f2)) < 0) {
-			
+		if ((r = file_open(name, &f2)) < 0)			
 			return r;
-		}
+
 		// write the content
 		wr_cnt = 0;
 		// cprintf("f->f_size: %d\n", f->f_size);

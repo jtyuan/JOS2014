@@ -37,6 +37,7 @@ USERAPPS :=		$(USERAPPS) \
 			$(OBJDIR)/user/link \
 			$(OBJDIR)/user/cp \
 			$(OBJDIR)/user/snapshot \
+			$(OBJDIR)/user/ssfilter \
 
 FSIMGTXTFILES :=	$(FSIMGTXTFILES) \
 			fs/lorem \

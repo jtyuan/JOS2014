@@ -20,8 +20,10 @@ ls(const char *path, const char *prefix)
 	int r;
 	struct Stat st;
 
-	if ((r = stat(path, &st)) < 0)
-		panic("stat %s: %e", path, r);
+	if ((r = stat(path, &st)) < 0) {
+		cprintf("stat %s: %e\n", path, r);
+		exit();
+	}
 	if (st.st_isdir && !flag['d'])
 		lsdir(path, prefix);
 	else
@@ -65,7 +67,7 @@ ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	if(flag['F'] && isdir)
 		printf("/");
 	if (flag['s'] && (ts = extract_date(name)) > 0) {
-		cprintf("(GMT+00 %02d/%02d/%02d %02d:%02d:%02d)", 
+		cprintf("(GMT+0 20%02d/%02d/%02d %02d:%02d:%02d)", 
 		(ts/SEC_PER_YEAR), (ts/SEC_PER_MONTH)%12, (ts/SEC_PER_DAY)%31, 
 		(ts/SEC_PER_HOUR)%24, (ts/SEC_PER_MIN)%60, ts%60);
 	}

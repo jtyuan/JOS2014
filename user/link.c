@@ -19,12 +19,13 @@ void link(const char *src_path, const char *dst_path)
 		return;
 	}
 
-	if ((wfd = open(dst_path, O_WRONLY | O_LINK)) < 0) { 
+	if ((wfd = open(dst_path, O_TRUNC | O_WRONLY | O_LINK)) < 0) { 
 		cprintf("open %s: %e\n", dst_path, wfd);
 		return;
 	}
 	
 	write(wfd, src_path, strlen(src_path));
+	write(wfd, "\0", 1);
 	
 	close(wfd);
 }

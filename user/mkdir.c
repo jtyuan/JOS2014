@@ -14,8 +14,10 @@ umain(int argc, char **argv)
 
 	// cprintf("%d %s\n", argc, argv[1]);
 
-	if ((fd = open(argv[1], O_MKDIR)) < 0)
-		panic("open %s: %e", argv[1], fd);
+	if ((fd = open(argv[1], O_MKDIR | O_EXCL)) < 0) {
+		cprintf("open %s: %e\n", argv[1], fd);
+		return;
+	}
 
 	close(fd);
 
