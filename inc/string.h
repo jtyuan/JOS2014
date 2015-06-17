@@ -13,6 +13,7 @@ int	strcmp(const char *s1, const char *s2);
 int	strncmp(const char *s1, const char *s2, size_t size);
 char *	strchr(const char *s, char c);
 char *	strrchr(const char *s, char ch);			// Lab 7
+char *	strfind(const char *s, char c);
 char *	strrev(char *str);					// Lab 7
 
 void *	memset(void *dst, int c, size_t len);

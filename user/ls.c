@@ -85,20 +85,6 @@ ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	printf("\n");
 }
 
-// Lab 7: returns true if name matches a snapshot file
-bool 
-is_snapshot(const char *name)
-{
-	char *pos = strrchr(name, '@');
-	if (pos == NULL)
-		return false;
-	while (*(++pos)) {
-		if (!isdigit(*pos))
-			return false;
-	}
-	return true;
-}
-
 // Lab 7: extract the timestamp string from name
 // return the int type of the timestamp
 int 

@@ -220,21 +220,6 @@ cat_path(char *dst, const char *src)
 	strcat(dst, src);
 }
 
-// returns true if name matches a snapshot file
-bool
-is_snapshot(const char *name)
-{
-	char *pos = strrchr(name, '@');
-	if (pos == NULL)
-		return false;
-	while (*(++pos)) {
-		if (!isdigit(*pos))
-			return false;
-	}
-	return true;
-}
-
-
 void
 usage(void)
 {
@@ -255,7 +240,7 @@ umain(int argc, char **argv)
 
 	flag = 'c';
 	recur = 0;
-	verbose = 1;
+	verbose = 0;
 	debug = 0;
 
 	argstart(&argc, argv, &args);

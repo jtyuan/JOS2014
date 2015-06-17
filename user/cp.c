@@ -177,20 +177,6 @@ cp1(const char *src_file, const char *dst_path, const char *f_name)
 	close(wfd);
 }
 
-
-bool is_snapshot(const char *name)
-{
-	char *pos = strrchr(name, '@');
-	if (pos == NULL)
-		return false;
-	while (*(++pos)) {
-		if (!isdigit(*pos))
-			return false;
-	}
-	return true;
-}
-
-
 void
 cat_path(char *dst, const char *src)
 {

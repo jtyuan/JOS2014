@@ -40,7 +40,7 @@ ss(const char *path, const char *prefix)
 		cprintf("stat %s: %e\n", path, r);
 		exit();
 	}
-	if (st.st_isdir && !flag['d'])
+	if (st.st_isdir)
 		ssdir(path, prefix);
 	else
 		ss1(0, st.st_isdir, st.st_islink, st.st_size, path);
@@ -112,6 +112,8 @@ bool in_range(int ts)
 	else if (flag['y'])
 		ts = ts - ts % SEC_PER_YEAR;
 
+	// cprintf("%d %d\n", req_ts, ts);
+
 	if (flag['a'] && ts < req_ts)
 		return false;
 	if (flag['b'] && ts > req_ts)
@@ -120,19 +122,6 @@ bool in_range(int ts)
 	if (!(flag['a'] || flag['b']) && ts != req_ts)
 		return false;
 
-	return true;
-}
-
-// returns true if name matches a snapshot file
-bool is_snapshot(const char *name)
-{
-	char *pos = strrchr(name, '@');
-	if (pos == NULL)
-		return false;
-	while (*(++pos)) {
-		if (!isdigit(*pos))
-			return false;
-	}
 	return true;
 }
 
@@ -214,6 +203,8 @@ umain(int argc, char **argv)
 
 	req_ts = year * SEC_PER_YEAR + month * SEC_PER_MONTH
 		+ day * SEC_PER_DAY + hour * SEC_PER_HOUR;
+
+	// cprintf("requested ts: %d in path: %s\n", req_ts, argv[1]);
 
 	if (argc == 1)
 		ss("/", "");
