@@ -1,3 +1,13 @@
+// Lab 7: main entry 
+// Usage:
+// snapshot [-(n|c)rdv] [file...]
+// 	   n: naive method (Split-Mirror)
+//     c: Copy-on-Write
+//     r: recursive
+//     d: display debug info
+//     v: verbose mode
+//
+
 #include <inc/lib.h>
 
 int flag;
@@ -36,6 +46,7 @@ snapshot(const char *path, const char *dst)
 		ss1(path, st.st_isdir, st.st_islink, st.st_size, 0, dst);
 }
 
+// Make snapshot for a directory
 void
 ssdir(const char *path, const char *dst)
 {
@@ -52,9 +63,8 @@ ssdir(const char *path, const char *dst)
 		cprintf("open %s: %e\n", path, fd);
 		exit();
 	}
-	// cprintf("survived\n");
+	
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
-		// cprintf("%s\n", f.f_name);
 		if (f.f_name[0] && !is_snapshot(f.f_name)) {
 			if (debug)
 				cprintf("%s\n", f.f_name);
@@ -74,6 +84,7 @@ ssdir(const char *path, const char *dst)
 	close(fd);
 }
 
+// Make a snapshot for file path/name, save it to dst/name
 void
 ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, const char *dst)
 {
@@ -99,6 +110,7 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 	// cprintf("%s %s\n", src_path, dst_path);
 
 	if (flag == 'n') {
+		// naive/split-mirror strategy
 		if (debug) {
 			cprintf("DEBUG MODE: NAIVE SNAPSHOT\n");
 			if ((r = spawnl("/cp", "cp", "-rvd", src_path, dst_path, (char*)0)) < 0) {
@@ -122,6 +134,7 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 	}
 
 	if (isdir) {
+		// simply make a new dir for dir files
 		if ((r = spawnl("/mkdir", "mkdir", dst_path, (char*)0)) < 0) {
 			cprintf("spawn %s: %e\n", "mkdir", r);
 			return;
@@ -132,10 +145,13 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 	}
 
 	if (flag == 'c') {
+		// copy-on-write strategy
 		if ((rfd = open(src_path, O_RDONLY)) < 0) {
 			cprintf("snapshot: open %s: %e\n", src_path, rfd);
 			return;
 		}
+
+		// read the file that saves all the cow-links
 		if ((lfd = open(LINK_RECORD, O_RDWR | O_CREAT)) < 0) {
 			cprintf("snapshot: open %s: %e\n", LINK_RECORD, lfd);
 			return;
@@ -145,18 +161,19 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 			exit();
 		}
 
+		// get the offset and len for the new cow-link
 		seek(lfd, st.st_size);
-
 		offset = st.st_size;
 		len = strlen(dst_path);
-
 		if ((r = write(lfd, dst_path, len)) != len) {
 			cprintf("write %s: %e\n", LINK_RECORD, r);
 			exit();
 		}
 
+		// tell fs to save cow-link in (offset, len) pair
 		snap(rfd, offset, len, &old_offset, &old_len);
 
+		// make a link between the original one and the cow-file
 		if ((r = spawnl("/link", "link", src_path, dst_path, (char*)0)) < 0) {
 			cprintf("snapshot: spawn /link: %e\n", r);
 			exit();
@@ -169,9 +186,15 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 		}
 
 		if (old_len != FILE_CLEAN) {
+			// redirect old cow-link that was still linking to the original file
+			// to the new cow-file, so that the disk space is free from such duplicates
+			// (only one copy for a sequence of unmodified snapshots)
+
+			// read the path of the old cow-file
 			seek(lfd, old_offset);
 			read(lfd, old_path, old_len);
 			old_path[old_len] = '\0';
+
 			if (debug)
 				cprintf("Redirecting old link: %s(len:%d)\n", old_path, old_len);
 	
@@ -188,6 +211,7 @@ ss1(const char *path, bool isdir, bool islink, off_t size, const char *name, con
 	}
 }
 
+// concatenate 2 strings to form an absolute path of the fs
 void
 cat_path(char *dst, const char *src)
 {
@@ -196,7 +220,9 @@ cat_path(char *dst, const char *src)
 	strcat(dst, src);
 }
 
-bool is_snapshot(const char *name)
+// returns true if name matches a snapshot file
+bool
+is_snapshot(const char *name)
 {
 	char *pos = strrchr(name, '@');
 	if (pos == NULL)

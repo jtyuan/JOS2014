@@ -125,6 +125,7 @@ serve_open(envid_t envid, struct Fsreq_open *req,
 	fileid = r;
 
 
+	// Lab 7: add link file & dir creation
 	if (req->req_omode & O_LINK) {
 		if ((r = file_mklink(path, &f)) < 0) {
 			if (!(req->req_omode & O_EXCL) && r == -E_FILE_EXISTS)
@@ -324,6 +325,7 @@ serve_sync(envid_t envid, union Fsipc *req)
 	return 0;
 }
 
+// Lab 7: Log the snapshot cow link path in the fs
 int
 serve_snap(envid_t envid, union Fsipc *ipc)
 {
@@ -358,6 +360,7 @@ fshandler handlers[] = {
 	[FSREQ_WRITE] =		(fshandler)serve_write,
 	[FSREQ_SET_SIZE] =	(fshandler)serve_set_size,
 	[FSREQ_SYNC] =		serve_sync,
+	// Lab 7:
 	[FSREQ_SNAP] = 		serve_snap
 };
 #define NHANDLERS (sizeof(handlers)/sizeof(handlers[0]))

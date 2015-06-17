@@ -49,8 +49,8 @@ struct File {
 	char f_name[MAXNAMELEN];	// filename
 	off_t f_size;			// file size in bytes
 	uint32_t f_type;		// file type
-	uint32_t f_link_offset;
-	uint32_t f_link_len;
+	uint32_t f_link_offset;		// Lab 7: offset in link record file
+	uint32_t f_link_len;		// Lab 7: length of the link path
 	// Block pointers.
 	// A block is allocated iff its value is != 0.
 	uint32_t f_direct[NDIRECT];	// direct blocks
@@ -117,11 +117,13 @@ union Fsipc {
 		size_t req_n;
 		char req_buf[PGSIZE - (sizeof(int) + sizeof(size_t))];
 	} write;
+	// Lab 7: snap request
 	struct Fsreq_snap {
 		int req_fileid;
 		size_t req_offset;
 		size_t req_len;
 	} snap;
+	// Lab 7: snap return
 	struct Fsret_snap {
 		size_t ret_offset;
 		size_t ret_len;

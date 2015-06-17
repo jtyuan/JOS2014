@@ -77,17 +77,25 @@ open(const char *path, int mode)
 	int r, fdnum;
 	struct Fd *fd;
 	struct Stat st;
-	// cprintf("%s\n",path);
+
+	// Lab 7: add link file support
+	// 		first open the path to judge whether it's a link file
+	// 		if it is, try to open the file it points to
+	//			(if that file is also a link, recur)
+	//		if not, simply reopen the file normally
 	
 	if (strlen(path) >= MAXPATHLEN)
 		return -E_BAD_PATH;
 	
+	// open the file in path for the first time,
+	// to check whether it's a link file
+
 	if ((r = fd_alloc(&fd)) < 0)
 		return r;
 	
 	strcpy(fsipcbuf.open.req_path, path);
 	
-	// fsipcbuf.open.req_omode = mode;
+	// O_TRUNC will kill the link, so I first removes it
 	fsipcbuf.open.req_omode = (mode | O_RDWR) & ~O_TRUNC;
 	
 	if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
@@ -100,19 +108,25 @@ open(const char *path, int mode)
 	if ((r = fstat(fdnum, &st)) < 0)
 		panic("stat %s: %e", path, r);
 	
-
 	if (st.st_islink && !(mode & O_LINK)) {
-		// cprintf("????\n");
+		// if the file is a link file, open the real file
+		// it pointing to
 		read(fdnum, tmp_path, st.st_size);
-		// cprintf("redirecting to %s\n", tmp_path);
 		close(fdnum);
+		// open the 'real' file
 		return open(tmp_path, mode);
 	} else {
+		// the file is not a link, so just reopen it
+		// in the normal way
 		close(fdnum);
+		
 		if ((r = fd_alloc(&fd)) < 0)
 			return r;
-		// cprintf("again %s\n", path);
+		
 		strcpy(fsipcbuf.open.req_path, path);
+
+		// the file may have been made in the first 
+		// open attempt, no need to check O_EXCL here
 		fsipcbuf.open.req_omode = mode & ~O_EXCL;
 		if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
 			fd_close(fd, 0);
@@ -221,7 +235,7 @@ sync(void)
 	return fsipc(FSREQ_SYNC, NULL);
 }
 
-
+// Lab 7: tell fs to save cow-link in (offset, len) pair
 static int
 devfile_snap(struct Fd *fd, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
 {

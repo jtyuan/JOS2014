@@ -1,3 +1,12 @@
+// Lab 7: modified from original JOS ls
+// add hidden file:
+// 		1. files starts with '.'
+// 		2. all snapshot files
+//
+// add argument:
+// 	  	a: list all files except for snapshots
+// 		s: list only snapshot files
+
 #include <inc/lib.h>
 
 #define SEC_PER_MIN	60
@@ -39,6 +48,7 @@ lsdir(const char *path, const char *prefix)
 	if ((fd = open(path, O_RDONLY)) < 0)
 		panic("open %s: %e", path, fd);
 	while ((n = readn(fd, &f, sizeof f)) == sizeof f)
+		// Lab 7: add special treatment for snapshot files
 		if ((f.f_name[0] && (f.f_name[0] != '.' || flag['a']) && !is_snapshot(f.f_name)) && !flag['s']) // hide filename starts with '.'
 			ls1(prefix, f.f_type==FTYPE_DIR, f.f_type==FTYPE_LNK, f.f_size, f.f_name);
 		else if (flag['s'] && is_snapshot(f.f_name))
@@ -66,6 +76,7 @@ ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	printf("%s", name);
 	if(flag['F'] && isdir)
 		printf("/");
+	// Lab 7: when s is set, list snapshot files
 	if (flag['s'] && (ts = extract_date(name)) > 0) {
 		cprintf("(GMT+0 20%02d/%02d/%02d %02d:%02d:%02d)", 
 		(ts/SEC_PER_YEAR), (ts/SEC_PER_MONTH)%12, (ts/SEC_PER_DAY)%31, 
@@ -74,8 +85,9 @@ ls1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	printf("\n");
 }
 
-
-bool is_snapshot(const char *name)
+// Lab 7: returns true if name matches a snapshot file
+bool 
+is_snapshot(const char *name)
 {
 	char *pos = strrchr(name, '@');
 	if (pos == NULL)
@@ -87,13 +99,17 @@ bool is_snapshot(const char *name)
 	return true;
 }
 
-int extract_date(const char *name)
+// Lab 7: extract the timestamp string from name
+// return the int type of the timestamp
+int 
+extract_date(const char *name)
 {
 	char *pos = strrchr(name, '@');
 	pos++;
 	return atoi(pos);
 }
 
+// Lab 7: concatenate 2 strings to form an absolute path of the fs
 void
 cat_path(char *dst, const char *src)
 {

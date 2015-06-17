@@ -1,3 +1,17 @@
+// Lab 7: list/filter snapshot according to time
+// Usage:
+// ssfilter [-Fl(a/b)] [path] [year] [month] [day] [hour]
+// 	F: add slash after dirs
+// 	l: list detail information
+// 	a: above(after) given time
+// 	b: below(before) given time
+//
+//	year: 	[2000, 2099]
+//	month: 	[1, 12]
+// 	day: 	[1, 31]
+//	hour:	[0, 23]
+
+
 #include <inc/lib.h>
 
 #define SEC_PER_MIN	60
@@ -80,6 +94,10 @@ ss1(const char *prefix, bool isdir, bool islink, off_t size, const char *name)
 	printf("\n");
 }
 
+// judge whether ts is in the requested range
+// flag['a'] > 0: above or equal to req_ts
+// flag['b'] > 0: below or equal to req_ts
+// flag['a'] == 0 && flag['a'] == 0: ts equals to req_ts
 bool in_range(int ts)
 {
 	if (!req_ts)
@@ -105,7 +123,7 @@ bool in_range(int ts)
 	return true;
 }
 
-
+// returns true if name matches a snapshot file
 bool is_snapshot(const char *name)
 {
 	char *pos = strrchr(name, '@');
@@ -118,13 +136,17 @@ bool is_snapshot(const char *name)
 	return true;
 }
 
-int extract_date(const char *name)
+// extract the timestamp string from name
+// return the int type of the timestamp
+int 
+extract_date(const char *name)
 {
 	char *pos = strrchr(name, '@');
 	pos++;
 	return atoi(pos);
 }
 
+// concatenate 2 strings to form an absolute path of the fs
 void
 cat_path(char *dst, const char *src)
 {

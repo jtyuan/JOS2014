@@ -15,6 +15,23 @@
 // Return the file data page for file descriptor index i
 #define INDEX2DATA(i)	((char*) (FILEDATA + (i)*PGSIZE))
 
+// --------------------------------------------------------------
+// Lab 7: Auxiliary functions
+// --------------------------------------------------------------
+
+bool
+is_snapshot(const char *name)
+{
+	char *pos = strrchr(name, '@');
+	if (pos == NULL)
+		return false;
+	while (*(++pos)) {
+		if (!isdigit(*pos))
+			return false;
+	}
+	return true;
+}
+
 
 // --------------------------------------------------------------
 // File descriptor manipulators
@@ -319,6 +336,7 @@ stat(const char *path, struct Stat *stat)
 	return r;
 }
 
+// Lab 7: tell fs to save cow-link in (offset, len) pair
 int
 snap(int fdnum, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
 {
@@ -337,3 +355,4 @@ snap(int fdnum, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
 		return -E_NOT_SUPP;
 	return (*dev->dev_snap)(fd, offset, len, old_offset, old_len);
 }
+

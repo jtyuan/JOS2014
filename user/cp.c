@@ -1,3 +1,14 @@
+// Lab 7: copy one file/dir to another file/dir
+// Usage:
+// cp [-rv] source_path target_path
+//    r: recursive
+//    v: verbose
+//
+//    source_path can be a dir only when r is set and target_path is not a regular/link file
+//    if both source and target are dirs, 
+//		when target already exists, source will be copied as subdir of target
+//		otherwise, create a new dir named target_path, and copy contents in source to that path
+
 #include <inc/lib.h>
 
 int recur;
@@ -22,9 +33,6 @@ cp(const char *src_path, char *dst_path)
 	rfd = -1;
 	wfd = -1;
 
-	// strcpy(dst_path, dst_path_in);
-	// cprintf("%s %s\n", src_path, dst_path);
-
 	if ((rfd = open(src_path, O_RDONLY)) < 0) {
 		cprintf("open %s: %e\n", src_path, rfd);
 		goto end;
@@ -35,15 +43,14 @@ cp(const char *src_path, char *dst_path)
 		goto end;
 	}
 
-
 	if (rst.st_isdir) {
+		// dir to dir copy
+		// only when arguments include '-r' can copy happen between dirs
 		if (!recur) {
 			cprintf("cp: %s is a directory (not copied).\n", src_path);
 			goto end;
 		}
 		if ((wfd = open(dst_path, O_RDWR | O_MKDIR | O_EXCL)) < 0) {
-			// cprintf("open %s: %e\n", dst_path, wfd);
-			// return;
 			if (wfd == -E_FILE_EXISTS) {
 				cat_path(dst_path, rst.st_name);
 				if ((wfd = open(dst_path, O_RDWR | O_MKDIR | O_TRUNC)) < 0) {
@@ -57,12 +64,16 @@ cp(const char *src_path, char *dst_path)
 			cprintf("stat %s: %e\n", dst_path, r);
 			goto end;
 		}
+
+		// if src is a dir, then dst must be a dir
 		if (!wst.st_isdir)
 			cprintf("cp: %s: Not a directory\n", dst_path);
 
 		cpdir(src_path, dst_path);
 
 	} else {
+
+		// file to file/dir copy
 		if ((wfd = open(dst_path, O_WRONLY | O_CREAT)) < 0) {
 			cprintf("open %s: %e\n", dst_path, wfd);
 			goto end;
@@ -84,6 +95,7 @@ end:
 		close(wfd);
 }
 
+// copy from from one directory to the other
 void
 cpdir(const char *src_path, const char *dst_path)
 {
@@ -106,20 +118,15 @@ cpdir(const char *src_path, const char *dst_path)
 			if (debug)
 				cprintf("%s\n", f.f_name);
 			if (f.f_type == FTYPE_DIR) {
+				// for directories, it's pointless to copy
+				// simply making a new directory is enough
 				src_buf[0] = '\0';
 				dst_buf[0] = '\0';
 				strcpy(src_buf, src_path);
 				strcpy(dst_buf, dst_path);
-				if (debug) {
-					cprintf("_1%s %s\n", src_buf, dst_buf);
-					cprintf("_s%s %s\n", src_path, dst_path);
-				}
 				cat_path(src_buf, f.f_name);
 				cat_path(dst_buf, f.f_name);
-				if (debug) {
-					cprintf("_2%s %s\n", src_buf, dst_buf);
-					cprintf("_s%s %s\n", src_path, dst_path);
-				}
+
 				if ((r = spawnl("/mkdir", "mkdir", dst_buf, (char*)0)) < 0)
 					return;
 				if (r >= 0)
@@ -138,6 +145,7 @@ cpdir(const char *src_path, const char *dst_path)
 	close(fd);
 }
 
+// copy one file from src_file to dst_path/f_name
 void
 cp1(const char *src_file, const char *dst_path, const char *f_name) 
 {
@@ -194,7 +202,7 @@ cat_path(char *dst, const char *src)
 void
 usage(void)
 {
-	printf("usage: cp [-rv] source_file buf_dst\n");
+	printf("usage: cp [-rv] source_path target_path\n");
 	exit();
 }
 

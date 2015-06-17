@@ -354,6 +354,7 @@ file_create(const char *path, struct File **pf)
 	return 0;
 }
 
+// Lab 7: Create "path", which is a directory.
 int
 file_mkdir(const char *path, struct File **pdir)
 {
@@ -377,6 +378,7 @@ file_mkdir(const char *path, struct File **pdir)
 	return 0;
 }
 
+// Lab 7: Create "path", which is a link file
 int
 file_mklink(const char *path, struct File **pdir)
 {
@@ -448,6 +450,7 @@ file_write(struct File *f, const void *buf, size_t count, off_t offset)
 	off_t pos;
 	char *blk;
 
+	// Lab 7: cow
 	if ((r = write_back(f)) < 0) {
 		cprintf("file_write/write_back: %e\n", r);
 		return r;
@@ -470,6 +473,8 @@ file_write(struct File *f, const void *buf, size_t count, off_t offset)
 	return count;
 }
 
+// Lab 7: save the new (offset, len) pair of the cow-target for File f
+// return its old (offset, len) pair
 int
 file_snap(struct File *f, size_t offset, size_t len, size_t *old_offset, size_t *old_len)
 {
@@ -529,6 +534,7 @@ int
 file_set_size(struct File *f, off_t newsize)
 {
 
+	// Lab 7: cow
 	int r;
 	if ((r = write_back(f)) < 0) {
 		cprintf("file_set_size/write_back: %e\n", r);
@@ -573,6 +579,7 @@ fs_sync(void)
 		flush_block(diskaddr(i));
 }
 
+// Lab 7: write_back function for COW in snapshot
 int
 write_back(struct File *f)
 {
@@ -580,9 +587,11 @@ write_back(struct File *f)
 	struct File *dir, *f1, *f2;
 	char name[MAXNAMELEN];
 	char wr_buf[1024];
+
 	// Check if the file is dirty
 	// Ignore the link file
 	if (f->f_type != FTYPE_LNK && f->f_link_len != FILE_CLEAN) {
+
 		// find the struct File * of the link record file
 		if ((r = file_open(LINK_RECORD, &f1)) < 0)
 			return r;
@@ -598,7 +607,7 @@ write_back(struct File *f)
 		if ((r = file_set_size(f2, 0)) < 0)
 			return r;
 
-		// write the content
+		// copy content
 		wr_cnt = 0;
 		while (wr_cnt < f->f_size) {
 			if ((r = file_read(f, wr_buf, 1023, wr_cnt)) < 0) {
@@ -613,8 +622,10 @@ write_back(struct File *f)
 			wr_cnt += r;
 		}
 		f2->f_type = f->f_type;
+		// flush the file f2 to commit changes
 		file_flush(f2);
-		// clear the 'dirty' bits
+
+		// clear the 'dirty' flag
 		f->f_link_offset = FILE_CLEAN;
 		f->f_link_len = FILE_CLEAN;
 	}

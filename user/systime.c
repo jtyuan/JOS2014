@@ -1,3 +1,6 @@
+// Lab 7: return a timestamp according to qemu system time (Host's GMT+0 time)
+// the timestamp counts from 2000/01/01 00:00:00
+
 #include <inc/lib.h>
 
 #define SEC_PER_MIN	60

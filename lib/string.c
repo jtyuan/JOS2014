@@ -106,6 +106,10 @@ strchr(const char *s, char c)
 	return 0;
 }
 
+
+// Lab 7:
+// Return a pointer to the last occurrence of 'c' in 's',
+// or a null pointer if the string has no 'c'.
 char *
 strrchr(const char *s, char c)
 {
@@ -132,6 +136,8 @@ strfind(const char *s, char c)
 	return (char *) s;
 }
 
+
+// Lab 7: revert a string
 char *
 strrev(char *s)
 {
@@ -313,6 +319,7 @@ strtol(const char *s, char **endptr, int base)
 	return (neg ? -val : val);
 }
 
+// Lab 7: convert an integer of base to string o
 char *
 itoa(int num, char *str, int base)
 {
@@ -333,6 +340,7 @@ itoa(int num, char *str, int base)
 	return 0;
 }
 
+// Lab 7: return the value of a hex character
 int hexval(char c)
 {
 	if (c >= '0' && c <= '9')
@@ -345,18 +353,21 @@ int hexval(char c)
 	return 0;
 }
 
+// Lab 7: return true if c is a digit number
 int
 isdigit(int c)
 {
 	return (((c)>='0')&&((c)<='9'));
 }
 
+// Lab 7: return true if c is a number
 int
 isxdigit(int c)
 {
 	return (isdigit(c) || ((c) >= 'A' && (c) <= 'F') || ((c) >= 'a' && (c) <= 'f'));
 }
 
+// Lab 7: convert a string to integer
 int
 atoi(const char *num)
 {
